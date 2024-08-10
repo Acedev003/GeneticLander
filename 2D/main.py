@@ -24,7 +24,7 @@ class Simulation:
     def __init__(self,
                  width=1280,
                  height=720,
-                 terrain_corners = 500):
+                 terrain_corners = 50):
         
         pygame.init()
         
@@ -115,9 +115,14 @@ class Simulation:
         d=3
         self.space.add(terrain_body)
         for a,b in pairwise(self.terrain_vertexes):
-            segment = pymunk.Segment(terrain_body, a, b, 10 )
-            segment.elasticity = 0.999
-            self.space.add(segment)
+            v1 = a
+            v2 = b
+            v3 = [ b[0] , self.height ]
+            v4 = [ a[0] , self.height ]
+            
+            shape = pymunk.Poly(terrain_body, [v1,v2,v3,v4])
+            shape.color = (25,25,255,255)
+            self.space.add(shape)
         
     def draw_terrain(self):
         if not self.terrain_vertexes:
