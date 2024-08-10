@@ -1,6 +1,8 @@
 import pymunk
 import pygame
 import random
+
+import pymunk.pygame_util
 from utils import generate_noise , pairwise
 
 class Categories:
@@ -9,26 +11,61 @@ class Categories:
 
 class Lander:
     def __init__(self,position,screen,space,mass,id=None):
+        self.id       = id
+        self.screen   = screen
+        self.screen_w = screen.get_size()[0]
+        self.screen_h = screen.get_size()[1]
+        self.space    = space
+        self.alive    = True
         
-        self.id     = id
-        self.screen = screen
-        self.space  = space
+        self.image = pygame.image.load("assets/Lander.png")
+        self.image = self.image.convert_alpha()
         
         self.body = pymunk.Body()
         self.body.position = position
-        shape = pymunk.Circle(self.body,20)
-        shape.mass = mass 
-        shape.color = None#(255,255,255,0)
-        shape.filter = pymunk.ShapeFilter(categories=Categories.LANDER_CAT,mask=Categories.TERRAIN_CAT)
-        space.add(self.body,shape)
+        
+        self.segments = [
+            ([15,0],[35,0]),
+            ([35,0],[44,10]),
+            ([44,10],[44,25]),
+            ([44,25],[49,49]),
+            ([44,25],[5,25]),
+            ([5,25],[1,49]),
+            ([5,25],[5,10]),
+            ([5,10],[15,0])
+        ]
+        
+        space.add(self.body)
+        for a,b in self.segments:
+            segment = pymunk.Segment(self.body, a, b, 3)
+            segment.color = (255,0,0,0)
+            segment.mass = mass/len(self.segments)
+            segment.filter = pymunk.ShapeFilter(categories=Categories.LANDER_CAT,mask=Categories.TERRAIN_CAT)
+            space.add(segment)
+            
+        # shape = pymunk.Circle(self.body,20)
+        # shape.mass = mass 
+        # shape.filter = pymunk.ShapeFilter(categories=Categories.LANDER_CAT,mask=Categories.TERRAIN_CAT)
+        # space.add(self.body,shape)
         
     def draw(self):
-        pygame.draw.circle(self.screen,(255,0,0),self.body.position,radius=20)
+        #pygame.draw.circle(self.screen,(255,0,0),self.body.position,radius=20)
+        rect = self.image.get_rect()
+        self.screen.blit(self.image, self.body.position)
+        if self.body.position[0] > self.screen_w or self.body.position[0] < 0 or self.body.position[1] > self.screen_h or self.body.position[1] < 0:
+            self.kill()
+        
+        print(self.body.position,"|",self.body.rotation_vector)
+            
         
     def kill(self):
         for shape in self.body.shapes:
             self.space.remove(shape)
         self.space.remove(self.body)
+        self.alive = False
+        
+    def has_life(self):
+        return self.alive
 
 class LanderFactory:
     def __init__(self,screen,space,num_landers=50):
@@ -44,8 +81,18 @@ class LanderFactory:
             self.landers.append(Lander((x,100),self.screen,self.space,100,i))
             
     def draw_landers(self):
-        for lander in self.landers:
-            lander.draw()
+        kill_list = []
+        for index,lander in enumerate(self.landers):
+            if lander.has_life():
+                lander.draw()
+            else:
+                kill_list.append(index)
+                
+        for index in sorted(kill_list,reverse=True):
+            self.landers.pop(index)
+    
+    def lander_count(self):
+        return len(self.landers)
 
 class Simulation:
     def __init__(self,
@@ -71,7 +118,7 @@ class Simulation:
         self.space         = pymunk.Space()
         self.space.gravity = (0, 981)
         
-        self.lander_factory = LanderFactory(self.screen,self.space)
+        self.lander_factory = LanderFactory(self.screen,self.space,1)
         
         self.init()
     
@@ -84,17 +131,20 @@ class Simulation:
     def loop(self):
         self.draw_terrain()
         self.lander_factory.draw_landers()
+        print(self.lander_factory.lander_count())
     
     def end(self):
         pass
     
     def run(self):
+        do = pymunk.pygame_util.DrawOptions(self.screen)
         while self.running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
                     
             self.screen.fill("black")
+            self.space.debug_draw(do)
             
             self.loop()
 
