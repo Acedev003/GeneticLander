@@ -62,6 +62,8 @@ class Lander:
         
         center_x,center_y = self.center_span.bb.center()
         
+        self.center_span.body.apply_force_at_local_point((10000, 1000), (center_x, center_y))
+        
         rotated_rect  = rotated_image.get_rect(center=(center_x,center_y))
         
         #pygame.draw.rect(self.image, (0, 255, 0), self.image.get_rect(), 1)
@@ -135,7 +137,7 @@ class Simulation:
         self.space         = pymunk.Space()
         self.space.gravity = (0, 981)
         
-        self.lander_factory = LanderFactory(self.screen,self.space,1)
+        self.lander_factory = LanderFactory(self.screen,self.space,10)
         
         self.init()
     
@@ -161,7 +163,7 @@ class Simulation:
                     self.running = False
                     
             self.screen.fill("black")
-            #self.space.debug_draw(do)
+            self.space.debug_draw(do)
             
             self.loop()
 
