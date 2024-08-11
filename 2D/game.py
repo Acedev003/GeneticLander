@@ -1,3 +1,4 @@
+import math
 import pymunk
 import pygame
 import random
@@ -27,35 +28,51 @@ class Lander:
         self.segments = [
             ([15,0],[35,0]),
             ([35,0],[44,10]),
-            ([44,10],[44,25]),
-            ([44,25],[49,49]),
-            ([44,25],[5,25]),
-            ([5,25],[1,49]),
-            ([5,25],[5,10]),
+            ([44,10],[44,38]),
+            ([44,38],[49,49]),
+            ([44,38],[5,38]),
+            ([5,38],[1,49]),
+            ([5,38],[5,10]),
             ([5,10],[15,0])
         ]
         
         space.add(self.body)
         for a,b in self.segments:
-            segment = pymunk.Segment(self.body, a, b, 3)
+            segment = pymunk.Segment(self.body, a, b, 2)
             segment.color = (255,0,0,0)
-            segment.mass = mass/len(self.segments)
+            segment.mass = mass/(len(self.segments)+1)
             segment.filter = pymunk.ShapeFilter(categories=Categories.LANDER_CAT,mask=Categories.TERRAIN_CAT)
             space.add(segment)
-            
-        # shape = pymunk.Circle(self.body,20)
-        # shape.mass = mass 
-        # shape.filter = pymunk.ShapeFilter(categories=Categories.LANDER_CAT,mask=Categories.TERRAIN_CAT)
-        # space.add(self.body,shape)
+        
+        center_span_a = [44,25]
+        center_span_b = [5,25]
+        
+        center_span = pymunk.Segment(self.body, center_span_a, center_span_b, 2)
+        center_span.color = (255,0,0,0)
+        center_span.mass = mass/(len(self.segments)+1)
+        center_span.filter = pymunk.ShapeFilter(categories=Categories.LANDER_CAT,mask=Categories.TERRAIN_CAT)
+        space.add(center_span)
+        
+        self.center_span = center_span
         
     def draw(self):
-        #pygame.draw.circle(self.screen,(255,0,0),self.body.position,radius=20)
-        rect = self.image.get_rect()
-        self.screen.blit(self.image, self.body.position)
+        
+        angle_degrees = math.degrees(self.body.angle)
+        rotated_image = pygame.transform.rotate(self.image, -angle_degrees)
+        
+        center_x,center_y = self.center_span.bb.center()
+        
+        rotated_rect  = rotated_image.get_rect(center=(center_x,center_y))
+        
+        #pygame.draw.rect(self.image, (0, 255, 0), self.image.get_rect(), 1)
+        
+        self.screen.blit(rotated_image,rotated_rect)
+        
+        #pygame.draw.circle(self.screen,(0,255,0),(center_x,center_y),radius=5)
+
         if self.body.position[0] > self.screen_w or self.body.position[0] < 0 or self.body.position[1] > self.screen_h or self.body.position[1] < 0:
             self.kill()
         
-        print(self.body.position,"|",self.body.rotation_vector)
             
         
     def kill(self):
@@ -144,7 +161,7 @@ class Simulation:
                     self.running = False
                     
             self.screen.fill("black")
-            self.space.debug_draw(do)
+            #self.space.debug_draw(do)
             
             self.loop()
 
