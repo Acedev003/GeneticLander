@@ -9,6 +9,49 @@ from utils import generate_noise , pairwise
 class Categories:
     LANDER_CAT  = 0b01
     TERRAIN_CAT = 0b10
+    
+class SmokeParticle:
+    def __init__(self, position, velocity, life_time, screen):
+        self.position = position
+        self.velocity = velocity
+        self.life_time = life_time
+        self.initial_life_time = life_time
+        self.screen = screen
+
+    def update(self, dt):
+        self.position[0] += self.velocity[0] * dt
+        self.position[1] += self.velocity[1] * dt
+        self.life_time -= dt
+
+    def draw(self):
+        if self.life_time > 0:
+            alpha = max(0, int(255 * (self.life_time / self.initial_life_time)))
+            color = (255, 255, 255, alpha)
+            surface = pygame.Surface((5, 5), pygame.SRCALPHA)
+            pygame.draw.circle(surface, color, (2, 2), 2)
+            self.screen.blit(surface, self.position)
+
+    def is_alive(self):
+        return self.life_time > 0
+    
+class SmokeEmitter:
+    def __init__(self, screen):
+        self.particles = []
+        self.screen = screen
+
+    def emit(self, position):
+        velocity = [random.uniform(-1, 1), random.uniform(-2, 0)]
+        life_time = random.uniform(0.5, 1.0)
+        self.particles.append(SmokeParticle(list(position), velocity, life_time, self.screen))
+
+    def update_and_draw(self, dt):
+        for particle in self.particles:
+            particle.update(dt)
+            particle.draw()
+
+        # Remove dead particles
+        self.particles = [p for p in self.particles if p.is_alive()]
+
 
 class Lander:
     def __init__(self,position,screen,space,mass,id=None):
@@ -24,6 +67,8 @@ class Lander:
         
         self.body = pymunk.Body()
         self.body.position = position
+        
+        self.smoke_emitter = SmokeEmitter(screen)
         
         self.segments = [
             ([15,0],[35,0]),
@@ -42,10 +87,12 @@ class Lander:
             segment.color = (255,0,0,0)
             segment.mass = mass/(len(self.segments)+1)
             segment.filter = pymunk.ShapeFilter(categories=Categories.LANDER_CAT,mask=Categories.TERRAIN_CAT)
+            segment.friction = 1
+            segment.elasticity = 0
             space.add(segment)
         
-        center_span_a = [44,25]
-        center_span_b = [5,25]
+        center_span_a = [44,25]#[5,25]
+        center_span_b = [5,25]#[44,25]
         
         center_span = pymunk.Segment(self.body, center_span_a, center_span_b, 2)
         center_span.color = (255,0,0,0)
@@ -55,14 +102,44 @@ class Lander:
         
         self.center_span = center_span
         
-    def draw(self):
+    def draw(self,apply_force_left,apply_force_right):
         
         angle_degrees = math.degrees(self.body.angle)
         rotated_image = pygame.transform.rotate(self.image, -angle_degrees)
         
         center_x,center_y = self.center_span.bb.center()
         
-        self.center_span.body.apply_force_at_local_point((10000, 1000), (center_x, center_y))
+        center_span_angle          = self.center_span.body.angle
+        center_span_angle_deg      = math.degrees(center_span_angle)
+        center_span_angle_deg_norm = center_span_angle_deg % 360
+        
+        if center_span_angle_deg_norm > 270 or center_span_angle_deg_norm < 90:
+            force = -10000
+            fx    = force * math.sin(-self.center_span.body.angle)
+            fy    = force * math.cos(-self.center_span.body.angle)
+        else:
+            force = 10000
+            fx    = force * math.sin(-self.center_span.body.angle)
+            fy    = force * math.cos(-self.center_span.body.angle)
+            
+        
+        
+        print("CSPAN_ANG_RAD:",center_span_angle)
+        print("CSPAN_ANG_DEG:",center_span_angle_deg)
+        print("CSPAN_ANG_DEG_NORM:",center_span_angle_deg_norm)
+        print("FORCE:",force)
+        print("FX",fx)
+        print("FY",fy)
+        print("#######")
+
+        if apply_force_left:
+            self.body.apply_force_at_local_point((fx,fy ), self.center_span.a)
+            self.smoke_emitter.emit(self.body.local_to_world(self.center_span.a))
+
+        if apply_force_right:
+            self.body.apply_force_at_local_point((fx,fy ), self.center_span.b)
+            self.smoke_emitter.emit(self.body.local_to_world(self.center_span.b))
+
         
         rotated_rect  = rotated_image.get_rect(center=(center_x,center_y))
         
@@ -71,12 +148,13 @@ class Lander:
         self.screen.blit(rotated_image,rotated_rect)
         
         #pygame.draw.circle(self.screen,(0,255,0),(center_x,center_y),radius=5)
+        
+        self.smoke_emitter.update_and_draw(1/60)
 
         if self.body.position[0] > self.screen_w or self.body.position[0] < 0 or self.body.position[1] > self.screen_h or self.body.position[1] < 0:
             self.kill()
-        
-            
-        
+    
+    
     def kill(self):
         for shape in self.body.shapes:
             self.space.remove(shape)
@@ -97,13 +175,13 @@ class LanderFactory:
     def create_landers(self):
         for i in range(self.num_landers):
             x = random.randint(10,self.screen.get_size()[0])
-            self.landers.append(Lander((x,100),self.screen,self.space,100,i))
+            self.landers.append(Lander((x,100),self.screen,self.space,10,i))
             
-    def draw_landers(self):
+    def draw_landers(self,apply_force_left,apply_force_right):
         kill_list = []
         for index,lander in enumerate(self.landers):
             if lander.has_life():
-                lander.draw()
+                lander.draw(apply_force_left,apply_force_right)
             else:
                 kill_list.append(index)
                 
@@ -129,6 +207,8 @@ class Simulation:
         self.fps     = 60
         self.dt      = 1/self.fps
         self.running = True
+        self.apply_force_left  = False
+        self.apply_force_right = False
         
         self.terrain_vertexes     = []
         self.terrain_break_count  = terrain_corners
@@ -149,8 +229,8 @@ class Simulation:
     
     def loop(self):
         self.draw_terrain()
-        self.lander_factory.draw_landers()
-        print(self.lander_factory.lander_count())
+        self.lander_factory.draw_landers(self.apply_force_left,self.apply_force_right)
+        print("NUM_LANDERS:",self.lander_factory.lander_count())
     
     def end(self):
         pass
@@ -162,8 +242,20 @@ class Simulation:
                 if event.type == pygame.QUIT:
                     self.running = False
                     
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_UP:
+                        self.apply_force_right = True
+                        self.apply_force_left  = True
+                    if event.key == pygame.K_LEFT:
+                        self.apply_force_left = True
+                    if event.key == pygame.K_RIGHT:   
+                        self.apply_force_right = True
+                else:
+                    self.apply_force_right = False
+                    self.apply_force_left  = False
+                    
             self.screen.fill("black")
-            self.space.debug_draw(do)
+            #self.space.debug_draw(do)
             
             self.loop()
 
@@ -213,6 +305,7 @@ class Simulation:
             
             shape = pymunk.Poly(terrain_body, [v1,v2,v3,v4])
             shape.filter = pymunk.ShapeFilter(categories=Categories.TERRAIN_CAT,mask=Categories.LANDER_CAT)
+            shape.friction = 0.9
             self.space.add(shape)
         
     def draw_terrain(self):
