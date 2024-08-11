@@ -52,21 +52,26 @@ class SmokeEmitter:
         # Remove dead particles
         self.particles = [p for p in self.particles if p.is_alive()]
 
-
 class Lander:
     def __init__(self,position,screen,space,mass,id=None):
-        self.id       = id
+        
         self.screen   = screen
         self.screen_w = screen.get_size()[0]
         self.screen_h = screen.get_size()[1]
         self.space    = space
-        self.alive    = True
+        
+        self.alive        = True
+        self.visible      = True
+        self.has_collided = False
         
         self.image = pygame.image.load("assets/Lander.png")
         self.image = self.image.convert_alpha()
         
         self.body = pymunk.Body()
         self.body.position = position
+        self.id = self.body.id
+        
+        space.add(self.body)
         
         self.smoke_emitter = SmokeEmitter(screen)
         
@@ -81,28 +86,29 @@ class Lander:
             ([5,10],[15,0])
         ]
         
-        space.add(self.body)
         for a,b in self.segments:
             segment = pymunk.Segment(self.body, a, b, 2)
             segment.color = (255,0,0,0)
             segment.mass = mass/(len(self.segments)+1)
             segment.filter = pymunk.ShapeFilter(categories=Categories.LANDER_CAT,mask=Categories.TERRAIN_CAT)
+            segment.collision_type = Categories.LANDER_CAT
             segment.friction = 1
             segment.elasticity = 0
             space.add(segment)
         
-        center_span_a = [44,25]#[5,25]
-        center_span_b = [5,25]#[44,25]
+        center_span_a = [5,25]
+        center_span_b = [44,25]
         
         center_span = pymunk.Segment(self.body, center_span_a, center_span_b, 2)
         center_span.color = (255,0,0,0)
         center_span.mass = mass/(len(self.segments)+1)
         center_span.filter = pymunk.ShapeFilter(categories=Categories.LANDER_CAT,mask=Categories.TERRAIN_CAT)
+        center_span.collision_type = Categories.LANDER_CAT
         space.add(center_span)
         
         self.center_span = center_span
         
-    def draw(self,apply_force_left,apply_force_right):
+    def draw_and_update(self,apply_force_left,apply_force_right):
         
         angle_degrees = math.degrees(self.body.angle)
         rotated_image = pygame.transform.rotate(self.image, -angle_degrees)
@@ -123,13 +129,15 @@ class Lander:
             fy    = force * math.cos(-self.center_span.body.angle)
             
         
-        
+        print("ID:",self.id)
         print("CSPAN_ANG_RAD:",center_span_angle)
         print("CSPAN_ANG_DEG:",center_span_angle_deg)
         print("CSPAN_ANG_DEG_NORM:",center_span_angle_deg_norm)
         print("FORCE:",force)
         print("FX",fx)
         print("FY",fy)
+        print("HAS_COLLIDED",self.has_collided)
+        print("VELOCITY:",abs(self.body.velocity))
         print("#######")
 
         if apply_force_left:
@@ -143,16 +151,15 @@ class Lander:
         
         rotated_rect  = rotated_image.get_rect(center=(center_x,center_y))
         
-        #pygame.draw.rect(self.image, (0, 255, 0), self.image.get_rect(), 1)
-        
-        self.screen.blit(rotated_image,rotated_rect)
-        
-        #pygame.draw.circle(self.screen,(0,255,0),(center_x,center_y),radius=5)
-        
-        self.smoke_emitter.update_and_draw(1/60)
+        if self.visible:
+            self.screen.blit(rotated_image,rotated_rect)
+            self.smoke_emitter.update_and_draw(1/60)
 
         if self.body.position[0] > self.screen_w or self.body.position[0] < 0 or self.body.position[1] > self.screen_h or self.body.position[1] < 0:
             self.kill()
+    
+    def set_collision(self,value):
+        self.has_collided = value
     
     
     def kill(self):
@@ -181,23 +188,34 @@ class LanderFactory:
         kill_list = []
         for index,lander in enumerate(self.landers):
             if lander.has_life():
-                lander.draw(apply_force_left,apply_force_right)
+                lander.draw_and_update(apply_force_left,apply_force_right)
             else:
                 kill_list.append(index)
-                
-        for index in sorted(kill_list,reverse=True):
-            self.landers.pop(index)
+        
+        # for index in sorted(kill_list,reverse=True):
+        #     self.landers.pop(index)
+            
+    def set_collision_true(self,ids):
+        for lander in self.landers:
+            if lander.id in ids:
+                lander.set_collision(True)
+            
     
     def lander_count(self):
         return len(self.landers)
 
-class Simulation:
+class KeyboardSimulation:
     def __init__(self,
                  width=1280,
                  height=720,
-                 terrain_corners = 500):
+                 gravity= 9.81,
+                 terrain_exaggeration = 300,
+                 terrain_corners = 500,
+                 keypress_enabled=True,
+                 physics_debug = False):
         
         pygame.init()
+        pygame.display.set_caption('Mun Lander') 
         
         self.width   = width
         self.height  = height 
@@ -206,18 +224,26 @@ class Simulation:
         self.clock   = pygame.time.Clock()
         self.fps     = 60
         self.dt      = 1/self.fps
+        
         self.running = True
-        self.apply_force_left  = False
-        self.apply_force_right = False
         
         self.terrain_vertexes     = []
         self.terrain_break_count  = terrain_corners
-        self.terrain_exaggeration = 300
+        self.terrain_exaggeration = terrain_exaggeration
         
         self.space         = pymunk.Space()
-        self.space.gravity = (0, 981)
+        self.space.gravity = (0, gravity*100)
         
-        self.lander_factory = LanderFactory(self.screen,self.space,10)
+        self.lander_factory  = LanderFactory(self.screen,self.space,1)
+        self.collion_handler = None
+        
+        self.keypress_enabled = keypress_enabled
+        self.physics_debug    = physics_debug
+        
+        # Handle Keypresses for rocket
+        
+        self.apply_force_left  = False
+        self.apply_force_right = False
         
         self.init()
     
@@ -226,11 +252,13 @@ class Simulation:
         self.generate_terrain_physics()
 
         self.lander_factory.create_landers()
+        
+        self.collion_handler = self.space.add_collision_handler(Categories.LANDER_CAT,Categories.TERRAIN_CAT)
+        self.collion_handler.post_solve = self.handle_collision
     
     def loop(self):
         self.draw_terrain()
         self.lander_factory.draw_landers(self.apply_force_left,self.apply_force_right)
-        print("NUM_LANDERS:",self.lander_factory.lander_count())
     
     def end(self):
         pass
@@ -241,8 +269,8 @@ class Simulation:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
-                    
-                if event.type == pygame.KEYDOWN:
+                
+                if event.type == pygame.KEYDOWN and self.keypress_enabled:
                     if event.key == pygame.K_UP:
                         self.apply_force_right = True
                         self.apply_force_left  = True
@@ -255,7 +283,9 @@ class Simulation:
                     self.apply_force_left  = False
                     
             self.screen.fill("black")
-            #self.space.debug_draw(do)
+            
+            if self.physics_debug:
+                self.space.debug_draw(do)
             
             self.loop()
 
@@ -305,6 +335,7 @@ class Simulation:
             
             shape = pymunk.Poly(terrain_body, [v1,v2,v3,v4])
             shape.filter = pymunk.ShapeFilter(categories=Categories.TERRAIN_CAT,mask=Categories.LANDER_CAT)
+            shape.collision_type = Categories.TERRAIN_CAT
             shape.friction = 0.9
             self.space.add(shape)
         
@@ -314,3 +345,12 @@ class Simulation:
         
         pygame.draw.polygon(self.screen, (255, 255, 255), self.terrain_vertexes)
     
+    def handle_collision(self,arbiter,space,data):
+        shapes = arbiter.shapes
+        ids    = [] 
+        
+        if arbiter.is_first_contact:
+            for shape in shapes:
+                ids.append(shape.body.id)
+            self.lander_factory.set_collision_true(ids)
+            print(arbiter.total_ke)

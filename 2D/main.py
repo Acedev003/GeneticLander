@@ -1,6 +1,6 @@
 import pyneat
-from game import Simulation
+from game import KeyboardSimulation
 
 if __name__ == '__main__':
-    sim = Simulation()
+    sim = KeyboardSimulation()
     sim.run()
