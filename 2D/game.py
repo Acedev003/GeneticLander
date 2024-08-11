@@ -1,9 +1,10 @@
 import math
+import time
+import neat
+import neat.genome
 import pymunk
 import pygame
 import random
-
-import pymunk.pygame_util
 from utils import generate_noise , pairwise
 
 class Categories:
@@ -41,7 +42,7 @@ class SmokeEmitter:
 
     def emit(self, position):
         velocity = [random.uniform(-1, 1), random.uniform(-2, 0)]
-        life_time = random.uniform(0.5, 1.0)
+        life_time = 0.3#random.uniform(0.5, 1.0)
         self.particles.append(SmokeParticle(list(position), velocity, life_time, self.screen))
 
     def update_and_draw(self, dt):
@@ -60,16 +61,12 @@ class Lander:
         self.screen_h = screen.get_size()[1]
         self.space    = space
         
-        self.alive        = True
-        self.visible      = True
-        self.has_collided = False
-        
         self.image = pygame.image.load("assets/Lander.png")
         self.image = self.image.convert_alpha()
         
         self.body = pymunk.Body()
         self.body.position = position
-        self.id = self.body.id
+        self.id = id
         
         space.add(self.body)
         
@@ -107,6 +104,19 @@ class Lander:
         space.add(center_span)
         
         self.center_span = center_span
+        
+        ## Input Parameters
+        
+        self.roll_percentage  = 1.0
+        self.velocity         = 0
+        self.x_pos            = self.center_span.bb.center()[0]
+        self.y_pos            = self.center_span.bb.center()[1]
+        self.land_slope_value = 0
+        
+        self.alive        = True
+        self.visible      = True
+        self.has_collided = False
+        
         
     def draw_and_update(self,apply_force_left,apply_force_right):
         
@@ -354,3 +364,145 @@ class KeyboardSimulation:
                 ids.append(shape.body.id)
             self.lander_factory.set_collision_true(ids)
             print(arbiter.total_ke)
+            
+            
+class GeneticSimulation:
+    def __init__(self,
+                 width=1280,
+                 height=720,
+                 gravity= 9.81,
+                 terrain_exaggeration = 300,
+                 terrain_corners = 500,
+                 lander_spawn_height = 100,
+                 lander_mass = 10,
+                 landing_window_seconds = 10,
+                 generations = 100,
+                 config_path = 'neat_config.ini'):
+        
+        pygame.init()
+        pygame.display.set_caption('Mun Lander Evolution') 
+        
+        self.width   = width
+        self.height  = height 
+        
+        self.screen  = pygame.display.set_mode((width, height))
+        self.clock   = pygame.time.Clock()
+        self.fps     = 60
+        self.dt      = 1/self.fps
+        
+        self.running = True
+        
+        self.terrain_vertexes     = []
+        self.terrain_break_count  = terrain_corners
+        self.terrain_exaggeration = terrain_exaggeration
+        
+        self.space         = pymunk.Space()
+        self.space.gravity = (0, gravity*100)
+        
+        self.lander_spawn_height = lander_spawn_height
+        self.lander_mass    = lander_mass
+        self.landing_window = landing_window_seconds
+        
+        self.collion_handler = None
+        
+        self.config_path      = config_path
+        self.generation_count = generations
+        
+        self.generate_terrain_vertexes()
+        self.generate_terrain_physics()
+        
+    def run(self):
+        config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                             neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                             self.config_path)
+        
+        population = neat.Population(config)
+        
+        stats = neat.StatisticsReporter()
+        population.add_reporter(stats)
+        population.add_reporter(neat.StdOutReporter(True))
+        #population.add_reporter(neat.Checkpointer(5))
+        
+        winner = population.run(self.run_simulation, self.generation_count)
+        
+    def run_simulation(self,genomes, config):
+        networks = []
+        landers  = []
+        
+        for genome_id, genome in genomes:
+            genome.fitness = 0
+            networks.append(neat.nn.FeedForwardNetwork.create(genome,config))
+            
+            x = random.randint(50,self.width-50)
+            y = self.lander_spawn_height
+            
+            landers.append(
+                Lander((x,y),self.screen,self.space,self.lander_mass,genome_id)
+            )
+        
+        start_time = time.time()
+        while (time.time() - start_time) < self.landing_window:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    exit()
+                    
+            self.screen.fill('BLACK')
+            self.draw_terrain()
+            
+            for lander in landers:
+                if lander.has_life():
+                    lander.draw_and_update(True,True)
+            
+            pygame.display.flip()
+            self.space.step(self.dt)        
+            self.clock.tick(self.fps)
+
+        
+    def generate_terrain_vertexes(self):
+        terrain_break_heights = [generate_noise([x/self.terrain_break_count,0]) for x in range(self.terrain_break_count)]
+        
+        start_index = 0
+        gap = self.width / (self.terrain_break_count - 1) 
+        
+        self.terrain_vertexes.append([start_index,self.height])
+        
+        for index, height in enumerate(terrain_break_heights[:-1]):
+            height1 = min(self.height-10,(self.height * 0.8) + (height * self.terrain_exaggeration))
+            p1 = [start_index, height1]
+
+            start_index += gap
+
+            height2 = min(self.height-10,(self.height * 0.8) + (terrain_break_heights[index + 1] * self.terrain_exaggeration))
+            p2 = [start_index, height2]
+            
+            self.terrain_vertexes.append(p1)
+            self.terrain_vertexes.append(p2)
+        
+        if len(terrain_break_heights) > 1:
+            final_height = min(self.height-10,(self.height * 0.8) + (terrain_break_heights[-1] * self.terrain_exaggeration))
+            self.terrain_vertexes.append([self.width,final_height])
+            
+        self.terrain_vertexes.append([self.width,self.height])
+        
+    def generate_terrain_physics(self):
+        terrain_body = pymunk.Body(body_type=pymunk.Body.STATIC)
+        self.space.add(terrain_body)
+        
+        for a,b in pairwise(self.terrain_vertexes[1:-1]):
+            v1 = a
+            v2 = b
+            v3 = [ b[0] , self.height ]
+            v4 = [ a[0] , self.height ]
+            
+            shape = pymunk.Poly(terrain_body, [v1,v2,v3,v4])
+            shape.filter = pymunk.ShapeFilter(categories=Categories.TERRAIN_CAT,mask=Categories.LANDER_CAT)
+            shape.collision_type = Categories.TERRAIN_CAT
+            shape.friction = 0.9
+            self.space.add(shape)
+        
+        
+    def draw_terrain(self):
+        if not self.terrain_vertexes:
+            return
+        
+        pygame.draw.polygon(self.screen, (255, 255, 255), self.terrain_vertexes)
