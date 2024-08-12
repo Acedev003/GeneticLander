@@ -1,11 +1,11 @@
 import math
 import time
 import neat
-import neat.genome
 import pymunk
 import pygame
 import random
-from utils import generate_noise , pairwise
+import visualize
+from utils import generate_noise , pairwise , Noise
 
 class Categories:
     LANDER_CAT  = 0b01
@@ -42,7 +42,7 @@ class SmokeEmitter:
 
     def emit(self, position):
         velocity = [random.uniform(-1, 1), random.uniform(-2, 0)]
-        life_time = 0.3#random.uniform(0.5, 1.0)
+        life_time = 0.2#random.uniform(0.5, 1.0)
         self.particles.append(SmokeParticle(list(position), velocity, life_time, self.screen))
 
     def update_and_draw(self, dt):
@@ -54,7 +54,7 @@ class SmokeEmitter:
         self.particles = [p for p in self.particles if p.is_alive()]
 
 class Lander:
-    def __init__(self,position,screen,space,mass,id=None):
+    def __init__(self,position,screen,space,mass,id=None,network=None,genome=None,target_zone=None):
         
         self.screen   = screen
         self.screen_w = screen.get_size()[0]
@@ -66,7 +66,14 @@ class Lander:
         
         self.body = pymunk.Body()
         self.body.position = position
-        self.id = id
+        self.genome_id = id
+        self.body_id   = self.body.id
+        self.network = network
+        self.genome  = genome 
+        self.target_zone = target_zone
+        
+        
+        self.altimer_scan_length = 100
         
         space.add(self.body)
         
@@ -111,14 +118,17 @@ class Lander:
         self.velocity         = 0
         self.x_pos            = self.center_span.bb.center()[0]
         self.y_pos            = self.center_span.bb.center()[1]
-        self.land_slope_value = 0
+        self.x_pos_percentage = self.x_pos/self.screen_w
+        self.y_pos_percentage = self.y_pos/self.screen_h
+        self.left_alt_probe   = 0
+        self.right_alt_probe  = 0
         
-        self.alive        = True
-        self.visible      = True
-        self.has_collided = False
+        self.alive              = True
+        self.visible            = True
+        self.has_collided       = False
+        self.collision_velocity = 10000000
         
-        
-    def draw_and_update(self,apply_force_left,apply_force_right):
+    def draw_and_update(self):
         
         angle_degrees = math.degrees(self.body.angle)
         rotated_image = pygame.transform.rotate(self.image, -angle_degrees)
@@ -130,46 +140,91 @@ class Lander:
         center_span_angle_deg_norm = center_span_angle_deg % 360
         
         if center_span_angle_deg_norm > 270 or center_span_angle_deg_norm < 90:
-            force = -10000
+            force = -10000 * int(not self.has_collided)
             fx    = force * math.sin(-self.center_span.body.angle)
             fy    = force * math.cos(-self.center_span.body.angle)
         else:
-            force = 10000
+            force = 10000 * int(not self.has_collided)
             fx    = force * math.sin(-self.center_span.body.angle)
             fy    = force * math.cos(-self.center_span.body.angle)
-            
         
-        print("ID:",self.id)
-        print("CSPAN_ANG_RAD:",center_span_angle)
-        print("CSPAN_ANG_DEG:",center_span_angle_deg)
-        print("CSPAN_ANG_DEG_NORM:",center_span_angle_deg_norm)
-        print("FORCE:",force)
-        print("FX",fx)
-        print("FY",fy)
-        print("HAS_COLLIDED",self.has_collided)
-        print("VELOCITY:",abs(self.body.velocity))
-        print("#######")
+        alt_l , alt_r         = self.get_altimeter_readings()  
+        
+        self.roll_percentage  = min(center_span_angle_deg_norm,360-center_span_angle_deg_norm)/360
+        self.velocity         = abs(self.body.velocity)
+        self.x_pos            = self.center_span.bb.center()[0]
+        self.y_pos            = self.center_span.bb.center()[1]
+        self.x_pos_percentage = self.x_pos/self.screen_w
+        self.y_pos_percentage = self.y_pos/self.screen_h
+        self.left_alt_probe   = alt_l
+        self.right_alt_probe  = alt_r
+        
+        x1, y1 = self.x_pos , self.y_pos
+        x2, y2 = self.target_zone
+        
+        self.distance_to_trgt = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+        
+        self.to_left_right    = x2-x1
+        
+        # print("ID:",self.genome_id)
+        # #print("CSPAN_ANG_RAD:",center_span_angle)
+        # #print("CSPAN_ANG_DEG:",center_span_angle_deg)
+        # print("CSPAN_ANG_DEG_NORM:",center_span_angle_deg_norm)
+        # print("ROLL_PERCENT:",self.roll_percentage)
+        # print("VELOCITY:",self.velocity)
+        # print("POS_X:",self.x_pos)
+        # print("POS_Y:",self.y_pos)
+        # print('ALT_L:',self.left_alt_probe)
+        # print('ALT_R:',self.right_alt_probe)
+        # #print("POS_X_PERCENT:",self.x_pos_percentage)
+        # #print("POS_Y_PERCENT:",self.y_pos_percentage)
+        # print("FORCE:",force)
+        # #print("FX",fx)
+        # #print("FY",fy)
+        # print("HAS_COLLIDED:",self.has_collided)
+        # print("COLLISION_VEL:",self.collision_velocity)
+        # print("#######")
 
-        if apply_force_left:
-            self.body.apply_force_at_local_point((fx,fy ), self.center_span.a)
+        engine_data    = self.network.activate([self.left_alt_probe,
+                                                self.right_alt_probe,
+                                                self.to_left_right,
+                                                self.velocity,
+                                                center_span_angle_deg_norm])
+        engine_force_l = engine_data[0]
+        engine_force_r = engine_data[1]
+
+        
+        fxl = engine_force_l * fx
+        fyl = engine_force_l * fy
+        
+        fxr = engine_force_r * fx
+        fyr = engine_force_r * fy
+        
+        self.body.apply_force_at_local_point((fxl,fyl), self.center_span.a)
+        self.body.apply_force_at_local_point((fxr,fyr), self.center_span.b)
+        
+        if engine_force_l > 0.5:
             self.smoke_emitter.emit(self.body.local_to_world(self.center_span.a))
-
-        if apply_force_right:
-            self.body.apply_force_at_local_point((fx,fy ), self.center_span.b)
+        if engine_force_r > 0.5:
             self.smoke_emitter.emit(self.body.local_to_world(self.center_span.b))
-
         
         rotated_rect  = rotated_image.get_rect(center=(center_x,center_y))
         
-        if self.visible:
+        if self.visible and self.alive:
             self.screen.blit(rotated_image,rotated_rect)
             self.smoke_emitter.update_and_draw(1/60)
 
         if self.body.position[0] > self.screen_w or self.body.position[0] < 0 or self.body.position[1] > self.screen_h or self.body.position[1] < 0:
             self.kill()
     
-    def set_collision(self,value):
-        self.has_collided = value
+    def set_collision_data(self):
+        if self.has_collided:
+            return
+        
+        self.has_collided = True
+        self.collision_velocity = self.velocity
+        if self.collision_velocity > 850:
+            self.kill()
     
     
     def kill(self):
@@ -180,6 +235,45 @@ class Lander:
         
     def has_life(self):
         return self.alive
+    
+    def get_collision_status(self):
+        return self.has_collided
+    
+    def get_genome_id(self):
+        return self.genome_id
+    
+    def get_body_id(self):
+        return self.body_id
+    
+    
+    def get_altimeter_readings(self):
+        
+        coord_left  = (self.x_pos - self.altimer_scan_length//2,self.y_pos)
+        coord_right = (self.x_pos + self.altimer_scan_length//2,self.y_pos)
+        
+        info_left = self.space.point_query_nearest(coord_left, self.screen_h,shape_filter = pymunk.ShapeFilter(categories=Categories.LANDER_CAT,mask=Categories.TERRAIN_CAT))
+        info_right = self.space.point_query_nearest(coord_right,self.screen_h,shape_filter = pymunk.ShapeFilter(categories=Categories.LANDER_CAT,mask=Categories.TERRAIN_CAT))
+        
+        return info_left.distance, info_right.distance
+
+    def evaluate_fitness(self):
+        
+        roll_score   = (1-self.roll_percentage) * 100
+        
+        if self.collision_velocity > 850:
+            speed_score = 0
+        else:
+            speed_score = 850-self.collision_velocity
+        
+        speed_score = speed_score**4
+        
+        life_bonus   = float(self.alive) 
+        
+        dist_score   = self.distance_to_trgt ** 2
+        
+        total_fitness =  (roll_score + speed_score - dist_score ) * life_bonus
+        
+        self.genome.fitness = total_fitness
 
 class LanderFactory:
     def __init__(self,screen,space,num_landers=50):
@@ -364,8 +458,7 @@ class KeyboardSimulation:
                 ids.append(shape.body.id)
             self.lander_factory.set_collision_true(ids)
             print(arbiter.total_ke)
-            
-            
+         
 class GeneticSimulation:
     def __init__(self,
                  width=1280,
@@ -375,8 +468,8 @@ class GeneticSimulation:
                  terrain_corners = 500,
                  lander_spawn_height = 100,
                  lander_mass = 10,
-                 landing_window_seconds = 10,
-                 generations = 100,
+                 landing_window_seconds = 8,
+                 generations = 1000,
                  config_path = 'neat_config.ini'):
         
         pygame.init()
@@ -400,16 +493,15 @@ class GeneticSimulation:
         self.space.gravity = (0, gravity*100)
         
         self.lander_spawn_height = lander_spawn_height
-        self.lander_mass    = lander_mass
-        self.landing_window = landing_window_seconds
+        self.lander_mass         = lander_mass
+        self.landing_window      = landing_window_seconds
+        self.landers             = None
         
-        self.collion_handler = None
+        self.collion_handler = self.space.add_collision_handler(Categories.LANDER_CAT,Categories.TERRAIN_CAT)
+        self.collion_handler.post_solve = self.handle_collision
         
         self.config_path      = config_path
         self.generation_count = generations
-        
-        self.generate_terrain_vertexes()
-        self.generate_terrain_physics()
         
     def run(self):
         config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
@@ -421,27 +513,45 @@ class GeneticSimulation:
         stats = neat.StatisticsReporter()
         population.add_reporter(stats)
         population.add_reporter(neat.StdOutReporter(True))
-        #population.add_reporter(neat.Checkpointer(5))
+        population.add_reporter(neat.Checkpointer(5))
         
         winner = population.run(self.run_simulation, self.generation_count)
         
+        
+        visualize.plot_stats(stats, ylog=False, view=True)
+        visualize.plot_species(stats, view=True)            
+        
     def run_simulation(self,genomes, config):
-        networks = []
-        landers  = []
+        self.terrain_vertexes  = []
+        
+        self.generate_terrain_vertexes()
+        self.generate_terrain_physics()
+        
+        self.flattest_zone = self.find_flattest_region_center()
+        
+        
+        self.landers  = []
         
         for genome_id, genome in genomes:
             genome.fitness = 0
-            networks.append(neat.nn.FeedForwardNetwork.create(genome,config))
             
             x = random.randint(50,self.width-50)
             y = self.lander_spawn_height
             
-            landers.append(
-                Lander((x,y),self.screen,self.space,self.lander_mass,genome_id)
+            self.landers.append(
+                Lander((x,y),
+                       self.screen,
+                       self.space,
+                       self.lander_mass,genome_id,
+                       neat.nn.FeedForwardNetwork.create(genome,config),
+                       genome,
+                       self.flattest_zone)
             )
+            
+        print(len(self.landers))
         
-        start_time = time.time()
-        while (time.time() - start_time) < self.landing_window:
+        running =True
+        while running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     exit()
@@ -449,17 +559,41 @@ class GeneticSimulation:
             self.screen.fill('BLACK')
             self.draw_terrain()
             
-            for lander in landers:
+            pygame.draw.circle(self.screen, (255,0,0), self.flattest_zone, 10)
+            
+            for lander in self.landers:
                 if lander.has_life():
-                    lander.draw_and_update(True,True)
+                    lander.draw_and_update()
             
             pygame.display.flip()
             self.space.step(self.dt)        
             self.clock.tick(self.fps)
+            
+            running = False
+            for lander in self.landers:
+                if lander.has_life():
+                    if not lander.get_collision_status():
+                        running = True
+                    
 
+        for lander in self.landers:
+            lander.evaluate_fitness()
+            
+        for lander in self.landers:
+            if lander.has_life():
+                lander.kill()
+        self.remove_terrain()
         
+        fitness_list = [x.fitness for _, x in genomes]
+        avg_fitness  = sum(fitness_list) / len(fitness_list)
+        
+        with open('fitness_results.txt', 'a') as file:
+            file.write(f'{avg_fitness}\n')
+            
+         
     def generate_terrain_vertexes(self):
-        terrain_break_heights = [generate_noise([x/self.terrain_break_count,0]) for x in range(self.terrain_break_count)]
+        noise_func = Noise()
+        terrain_break_heights = [noise_func.generate_noise([x/self.terrain_break_count,0]) for x in range(self.terrain_break_count)]
         
         start_index = 0
         gap = self.width / (self.terrain_break_count - 1) 
@@ -483,10 +617,61 @@ class GeneticSimulation:
             self.terrain_vertexes.append([self.width,final_height])
             
         self.terrain_vertexes.append([self.width,self.height])
-        
+    
+    def find_flattest_region_center(self,w=100):
+        terrain_vertexes = self.terrain_vertexes
+        flattest_start = 0
+        min_slope_sum = float('inf')
+
+        for i in range(len(terrain_vertexes) - 1):
+            slope_sum = 0
+            current_width = 0
+            j = i
+
+            while j < len(terrain_vertexes) - 1 and current_width < w:
+                x1, y1 = terrain_vertexes[j]
+                x2, y2 = terrain_vertexes[j + 1]
+
+                if x2 == x1:
+                    slope = 0  # Flat segment (vertical in x)
+                else:
+                    slope = abs((y2 - y1) / (x2 - x1))
+                slope_sum += slope
+                current_width += (x2 - x1)
+                j += 1
+
+            if current_width >= w and slope_sum < min_slope_sum:
+                min_slope_sum = slope_sum
+                flattest_start = i
+
+        # Calculate the center point of the flattest region
+        flattest_region_start = terrain_vertexes[flattest_start][0]
+        current_width = 0
+        j = flattest_start
+
+        while j < len(terrain_vertexes) - 1 and current_width < w:
+            current_width += (terrain_vertexes[j + 1][0] - terrain_vertexes[j][0])
+            j += 1
+
+        flattest_region_end = terrain_vertexes[j][0]
+        center_x = (flattest_region_start + flattest_region_end) / 2
+
+        # Find the y-coordinate corresponding to the center x-coordinate
+        for k in range(len(terrain_vertexes) - 1):
+            x1, y1 = terrain_vertexes[k]
+            x2, y2 = terrain_vertexes[k + 1]
+
+            if x1 <= center_x <= x2:
+                t = (center_x - x1) / (x2 - x1)
+                center_y = y1 + t * (y2 - y1)
+                return (center_x, center_y)
+
+        return None  # This should not be reached if input is valid
+
+    
     def generate_terrain_physics(self):
-        terrain_body = pymunk.Body(body_type=pymunk.Body.STATIC)
-        self.space.add(terrain_body)
+        self.terrain_body = pymunk.Body(body_type=pymunk.Body.STATIC)
+        self.space.add(self.terrain_body)
         
         for a,b in pairwise(self.terrain_vertexes[1:-1]):
             v1 = a
@@ -494,15 +679,35 @@ class GeneticSimulation:
             v3 = [ b[0] , self.height ]
             v4 = [ a[0] , self.height ]
             
-            shape = pymunk.Poly(terrain_body, [v1,v2,v3,v4])
+            shape = pymunk.Poly(self.terrain_body, [v1,v2,v3,v4])
             shape.filter = pymunk.ShapeFilter(categories=Categories.TERRAIN_CAT,mask=Categories.LANDER_CAT)
             shape.collision_type = Categories.TERRAIN_CAT
             shape.friction = 0.9
             self.space.add(shape)
-        
+            
+    def remove_terrain(self):
+        for shape in self.terrain_body.shapes:
+            self.space.remove(shape)
+        self.space.remove(self.terrain_body)
         
     def draw_terrain(self):
         if not self.terrain_vertexes:
             return
         
         pygame.draw.polygon(self.screen, (255, 255, 255), self.terrain_vertexes)
+
+    def handle_collision(self,arbiter,space,data):
+        shapes = arbiter.shapes
+        
+        if arbiter.is_first_contact:
+            ids    = [] 
+            for shape in shapes:
+                ids.append(shape.body.id)
+    
+            for lander in self.landers:
+                if lander.get_body_id() in ids:
+                    lander.set_collision_data()
+                
+            
+        
+            
