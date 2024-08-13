@@ -213,10 +213,10 @@ class Lander:
 
         # Determine the force based on the normalized angle
         if center_span_angle_deg_norm > 270 or center_span_angle_deg_norm < 90:
-            force = -300000 * int(not self.has_collided)
+            force = -250000 * int(not self.has_collided)
             self.logger.debug(f'{self.genome_id}-{self.body_id} FORCE_APPLIED        : {force}')
         else:
-            force = 300000 * int(not self.has_collided)
+            force = 250000 * int(not self.has_collided)
             self.logger.debug(f'{self.genome_id}-{self.body_id} FORCE_APPLIED        : {force}')
 
         # Calculate force components fx and fy
@@ -754,7 +754,7 @@ class GeneticSimulation:
         stats = neat.StatisticsReporter()
         population.add_reporter(stats)
         population.add_reporter(neat.StdOutReporter(True))
-        population.add_reporter(neat.Checkpointer(50,filename_prefix="checkpoints/ckpt-"))
+        population.add_reporter(neat.Checkpointer(10,filename_prefix="checkpoints/ckpt-"))
         
         winner = population.run(self.run_simulation, self.generation_count)
         
