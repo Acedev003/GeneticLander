@@ -6,11 +6,10 @@ import pymunk
 import pygame
 import random
 import logging
-import visualize
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import numpy as np
-from utils import generate_noise , pairwise , Noise
+from utils import Noise, generate_noise, pairwise, plot_stats, plot_species
 
 class Categories:
     LANDER_CAT  = 0b01
@@ -758,8 +757,8 @@ class GeneticSimulation:
         
         winner = population.run(self.run_simulation, self.generation_count)
         
-        visualize.plot_stats(stats, ylog=False, view=True)
-        visualize.plot_species(stats, view=True)            
+        plot_stats(stats, ylog=False, view=True)
+        plot_species(stats, view=True)            
         
     def run_simulation(self,genomes, config):
         self.logger.debug('NEW_SIMULATION START')
