@@ -95,6 +95,7 @@ class Lander:
         self.image = self.lander_no_engine
         
         self.altimer_scan_length = 100
+        self.font = pygame.font.SysFont('Arial', 10)
         
         space.add(self.body)
         
@@ -293,9 +294,13 @@ class Lander:
                                                 self.fuel],)
         
         # Extract engine forces
+        
+        eng_l_out_raw = engine_data[0]
+        eng_r_out_raw = engine_data[1]
+        
         if self.fuel >= 0:
-            engine_force_l = max(0,engine_data[0])
-            engine_force_r = max(0,engine_data[1])
+            engine_force_l = (eng_l_out_raw+1)/2
+            engine_force_r = (eng_r_out_raw+1)/2
             self.fuel     -= engine_force_l
             self.fuel     -= engine_force_r
             self.center_span.mass -= engine_force_l
@@ -360,10 +365,21 @@ class Lander:
             bar_x = center_x - bar_width / 2  # Center the bar above the lander
             bar_y = center_y - 40  # Position the bar above the lander
 
-            # Draw the health bar background (red)
             pygame.draw.rect(self.screen, (255, 0, 0), (bar_x, bar_y, bar_width, bar_height))
             pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, bar_y, bar_width * fuel_percentage, bar_height))
             
+            speed_text = self.font.render(f'Vel: {self.velocity:.2f}', True, (255, 255, 255))
+            speed_text_rect = speed_text.get_rect(center=(bar_x, bar_y-20))
+
+            angle_text = self.font.render(f'Roll: {self.roll_percentage:.2f}', True, (255, 255, 255))
+            angle_text_rect = angle_text.get_rect(center=(bar_x, bar_y-30))
+            
+            eng_text = self.font.render(f'Pow: {eng_l_out_raw:.2f}L {eng_r_out_raw:.2f}R', True, (255, 255, 255))
+            eng_text_rect = eng_text.get_rect(center=(bar_x, bar_y-40))
+            
+            self.screen.blit(speed_text, speed_text_rect)
+            self.screen.blit(angle_text, angle_text_rect)
+            self.screen.blit(eng_text, eng_text_rect)
             self.screen.blit(rotated_image, rotated_rect)
             self.logger.debug(f'{self.genome_id}-{self.body_id} IMAGE_BLIT           : True')
             #self.smoke_emitter.update_and_draw(1/60)
