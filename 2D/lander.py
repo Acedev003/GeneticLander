@@ -1,14 +1,8 @@
-import csv
 import math
-import time
 import neat
 import pymunk
 import pygame
 import random
-import logging
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-import numpy as np
 from utils import Noise, generate_noise, pairwise, plot_stats, plot_species
 
 class Categories:
