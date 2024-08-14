@@ -1,5 +1,4 @@
-import pyneat
-from game import KeyboardSimulation , GeneticSimulation
+from simulation import GeneticSimulation
 
 if __name__ == '__main__':
     sim = GeneticSimulation()

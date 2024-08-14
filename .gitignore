@@ -1,5 +1,8 @@
 env/
 __pycache__/
-checkpoints/
-runs/
+2D/runs/*
+2D/checkpoints/*
 fitness_results.csv
+
+!2D/checkpoints/checkpoints.txt
+!2D/runs/runs.txt
