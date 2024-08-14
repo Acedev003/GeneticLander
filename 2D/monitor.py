@@ -1,63 +1,51 @@
-import matplotlib.pyplot as plt
-import pandas as pd
-import matplotlib.animation as animation
+import io
+import base64
 import argparse
+import pandas as pd
+import matplotlib.pyplot as plt
+from flask import Flask, render_template_string
 
-def main(csv_file_path):
-    # Initialize lists to hold data
-    runs = []
-    avg_dist = []
-    avg_speed = []
-    avg_fitness = []
+app = Flask(__name__)
+csv_file_path = None
 
-    # Create a figure and axis for plotting
-    fig, ax = plt.subplots()
-    line1, = ax.plot([], [], 'r-', label='Avg Dist')
-    line2, = ax.plot([], [], 'g-', label='Avg Speed')
-    line3, = ax.plot([], [], 'b-', label='Avg Fitness')
-    ax.set_xlim(0, 100)  # Initial x-axis range
-    ax.set_ylim(0, 1000000)  # Initial y-axis range
-    ax.legend()
-    ax.set_xlabel('Run')
-    ax.set_ylabel('Value')
-    ax.set_title('Live Data Plot')
+@app.route('/')
+def plot_csv():
+    df = pd.read_csv(csv_file_path)
+    
+    plt.figure()
+    plt.plot(df['Run'], df['Avg Dist'], label='Avg Dist')
+    plt.plot(df['Run'], df['Avg Speed'], label='Avg Speed')
+    plt.plot(df['Run'], df['Avg Fitness'], label='Avg Fitness')
+    plt.xlabel('Run')
+    plt.ylabel('Value')
+    plt.legend()
+    plt.title('Live Data Plot')
+    
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close()
 
-    def init():
-        line1.set_data([], [])
-        line2.set_data([], [])
-        line3.set_data([], [])
-        return line1, line2, line3
+    html = '''
+    <html>
+    <head>
+        <title>Live Data Plot</title>
+        <meta http-equiv="refresh" content="20">
+    </head>
+    <body>
+        <img src="data:image/png;base64,{{ plot_data }}" />
+    </body>
+    </html>
+    '''
+    plot_data = base64.b64encode(buf.getvalue()).decode('utf-8')
+    
+    return render_template_string(html, plot_data=plot_data)
 
-    def update(frame):
-        global runs, avg_dist, avg_speed, avg_fitness
-
-        # Read the CSV file
-        df = pd.read_csv(csv_file_path)
-
-        # Update the data lists
-        runs = df['Run'].tolist()
-        avg_dist = df['Avg Dist'].tolist()
-        avg_speed = df['Avg Speed'].tolist()
-        avg_fitness = df['Avg Fitness'].tolist()
-
-        # Update the plot
-        line1.set_data(runs, avg_dist)
-        line2.set_data(runs, avg_speed)
-        line3.set_data(runs, avg_fitness)
-
-        # Adjust x-axis limits based on data
-        ax.set_xlim(min(runs), max(runs))
-
-        return line1, line2, line3
-
-    # Create animation
-    ani = animation.FuncAnimation(fig, update, init_func=init, interval=1000)  # Update every second
-
-    plt.show()
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Live plot data from CSV file.")
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Flask app to plot live data from a CSV file.")
     parser.add_argument('csv_file', type=str, help="Path to the CSV file")
     args = parser.parse_args()
-
-    main(args.csv_file)
+    
+    csv_file_path = args.csv_file
+    
+    app.run(host='0.0.0.0', port=5000)
