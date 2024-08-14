@@ -2,6 +2,8 @@ import io
 import base64
 import argparse
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from flask import Flask, render_template_string
 
@@ -48,4 +50,4 @@ if __name__ == '__main__':
     
     csv_file_path = args.csv_file
     
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5001)
