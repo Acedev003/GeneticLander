@@ -46,6 +46,7 @@ class GeneticSimulation:
         self.neat_config_path = "neat_config.ini"       # Path to neat configuration file 
         self.fitness_file     = f'runs/fitness_data_run-{int(time.time())}.csv'
         self.generation_count = generations
+        self.run_counter      = 0
         
         
         self.collion_handler = self.space.add_collision_handler(Categories.LANDER_CAT,Categories.TERRAIN_CAT)
@@ -71,6 +72,7 @@ class GeneticSimulation:
     def run_simulation(self,genomes,config):
         self.terrain_points = []
         self.landers        = []
+        self.run_counter   += 1
         
         self.generate_terrain_points()
         self.initialize_terrain_physics()
@@ -149,10 +151,9 @@ class GeneticSimulation:
         with open(self.fitness_file, 'a', newline='') as file:
             writer = csv.writer(file)
             if file.tell() == 0:
-                writer.writerow(['Avg Dist','Avg Speed','Avg Fitness'])
-            writer.writerow([avg_distance, avg_velocity, avg_fitness])
-            
-        
+                writer.writerow(['Run','Avg Dist','Avg Speed','Avg Fitness'])
+            writer.writerow([self.run_counter,avg_distance, avg_velocity, avg_fitness])
+              
     def generate_terrain_points(self):
         noise_func = Noise()
         terrain_break_heights = [ noise_func.generate_noise([x/self.terrain_break_count,0]) 
