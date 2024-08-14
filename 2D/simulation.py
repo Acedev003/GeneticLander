@@ -1,3 +1,4 @@
+import os
 import csv
 import neat
 import time
@@ -12,8 +13,12 @@ class GeneticSimulation:
     def __init__(self,
                  generations   : int = 5000,
                  screen_width  : int = 1280,
-                 screen_height : int = 720
+                 screen_height : int = 720,
+                 headless      : bool = True
                  ):
+        
+        if headless:
+            os.environ["SDL_VIDEODRIVER"] = "dummy"
         
         pygame.init()
         pygame.display.set_caption('Planetary Lander Evolution')
