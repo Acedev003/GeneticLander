@@ -14,11 +14,11 @@ class GeneticSimulation:
                  generations   : int = 5000,
                  screen_width  : int = 1280,
                  screen_height : int = 720,
-                 headless      : bool = True
+                 headless      : bool = False
                  ):
         
         if headless:
-            os.environ["SDL_VIDEODRIVER"] = "dummy"
+            os.environ["SDL_VIDEODRIVER"] = "dummy" 
         
         pygame.init()
         pygame.display.set_caption('Planetary Lander Evolution')
@@ -57,12 +57,14 @@ class GeneticSimulation:
         self.collion_handler = self.space.add_collision_handler(Categories.LANDER_CAT,Categories.TERRAIN_CAT)
         self.collion_handler.post_solve = self.handle_collision
      
-    def run(self):
+    def run(self,resume_path : str = None):
         config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                              neat.DefaultSpeciesSet, neat.DefaultStagnation,
                              self.neat_config_path)
-        
-        population = neat.Population(config)
+        if resume_path:
+            population = neat.Checkpointer().restore_checkpoint(resume_path)
+        else:
+            population = neat.Population(config)
         
         stats = neat.StatisticsReporter()
         population.add_reporter(stats)
