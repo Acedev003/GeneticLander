@@ -33,16 +33,17 @@ def plot_csv():
     <html>
     <head>
         <title>Live Data Plot</title>
-        <meta http-equiv="refresh" content="20">
+        <meta http-equiv="refresh" content="60">
     </head>
     <body>
+        <h4>{{csv_file_path}}</h4>
         <img src="data:image/png;base64,{{ plot_data }}" />
     </body>
     </html>
     '''
     plot_data = base64.b64encode(buf.getvalue()).decode('utf-8')
     
-    return render_template_string(html, plot_data=plot_data)
+    return render_template_string(html, plot_data=plot_data,csv_file_path=csv_file_path)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Flask app to plot live data from a CSV file.")
