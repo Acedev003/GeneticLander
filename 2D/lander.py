@@ -63,7 +63,8 @@ class TwinFlameCan:
                  network   : neat.nn.FeedForwardNetwork,
                  genome    : neat.DefaultGenome,
                  target_zone  : tuple[int,int],
-                 terrain_data : list[tuple[int,int]]):
+                 terrain_data : list[tuple[int,int]],
+                 image_assets : list[pygame.Surface]):
         
         self.screen   = screen
         self.screen_w = screen.get_size()[0]
@@ -74,17 +75,10 @@ class TwinFlameCan:
         
         ####### SPRITES #######
         
-        self.lander_engine_off      = pygame.image.load("assets/Lander.png")
-        self.lander_engine_off      = self.lander_engine_off.convert_alpha()
-        
-        self.lander_left_engine_on  = pygame.image.load("assets/LanderLE.png")
-        self.lander_left_engine_on  = self.lander_left_engine_on.convert_alpha()
-        
-        self.lander_right_engine_on = pygame.image.load("assets/LanderRE.png")
-        self.lander_right_engine_on = self.lander_right_engine_on.convert_alpha()
-        
-        self.lander_both_engine_on  = pygame.image.load("assets/LanderLRE.png")
-        self.lander_both_engine_on  = self.lander_both_engine_on.convert_alpha()
+        self.lander_engine_off      = image_assets[0]
+        self.lander_left_engine_on  = image_assets[1]
+        self.lander_right_engine_on = image_assets[2]
+        self.lander_both_engine_on  = image_assets[3]
         
         ####### FUEL, THRUST AND MASS #######
         
@@ -393,9 +387,10 @@ class PulseRocker(TwinFlameCan):
                  network   : neat.nn.FeedForwardNetwork,
                  genome    : neat.DefaultGenome,
                  target_zone  : tuple[int,int],
-                 terrain_data : list[tuple[int,int]]):
+                 terrain_data : list[tuple[int,int]],
+                 image_assets : list[pygame.Surface]):
         
-        super().__init__(position, screen, space, genome_id, network, genome, target_zone, terrain_data)
+        super().__init__(position, screen, space, genome_id, network, genome, target_zone, terrain_data,image_assets)
         
         ####### FUEL, THRUST AND MASS #######
         
