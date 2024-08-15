@@ -43,6 +43,7 @@ class GeneticSimulation:
         self.terrain_screen_prcnt = 0.8                 # 0.5 to 0.8 recommended. Terrain height base as a percentage of screen.
         self.terrain_friction     = 0.9
         
+        self.font_asset             = pygame.font.SysFont('Arial', 10)
         self.terrain_texture        = pygame.image.load("assets/moon.png").convert()
         self.lander_engine_off      = pygame.image.load("assets/Lander.png").convert_alpha()
         self.lander_left_engine_on  = pygame.image.load("assets/LanderLE.png").convert_alpha()
@@ -137,7 +138,8 @@ class GeneticSimulation:
                            self.lander_left_engine_on,
                            self.lander_right_engine_on,
                            self.lander_both_engine_on
-                       ])
+                       ],
+                       self.font_asset)
             )
             
         print("LANDERS_COUNT:",len(self.landers))

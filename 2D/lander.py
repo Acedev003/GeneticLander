@@ -64,13 +64,14 @@ class TwinFlameCan:
                  genome    : neat.DefaultGenome,
                  target_zone  : tuple[int,int],
                  terrain_data : list[tuple[int,int]],
-                 image_assets : list[pygame.Surface]):
+                 image_assets : list[pygame.Surface],
+                 render_font  : pygame.font.Font):
         
         self.screen   = screen
         self.screen_w = screen.get_size()[0]
         self.screen_h = screen.get_size()[1]
         self.space    = space
-        self.font     = pygame.font.SysFont('Arial', 10)
+        self.font     = render_font
         self.smoke    = SmokeEmitter(screen)
         
         ####### SPRITES #######
@@ -388,9 +389,10 @@ class PulseRocker(TwinFlameCan):
                  genome    : neat.DefaultGenome,
                  target_zone  : tuple[int,int],
                  terrain_data : list[tuple[int,int]],
-                 image_assets : list[pygame.Surface]):
+                 image_assets : list[pygame.Surface],
+                 render_font  : pygame.font.Font):
         
-        super().__init__(position, screen, space, genome_id, network, genome, target_zone, terrain_data,image_assets)
+        super().__init__(position, screen, space, genome_id, network, genome, target_zone, terrain_data,image_assets,render_font)
         
         ####### FUEL, THRUST AND MASS #######
         
