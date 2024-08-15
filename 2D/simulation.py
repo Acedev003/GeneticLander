@@ -3,6 +3,7 @@ import csv
 import neat
 import time
 import random
+import neat.genome
 import pygame
 import pygame.gfxdraw
 import pymunk
@@ -83,7 +84,7 @@ class GeneticSimulation:
         plot_stats(stats, ylog=False, view=True)
         plot_species(stats, view=True)     
     
-    def run_simulation(self,genomes,config):
+    def run_simulation(self,genomes: list[tuple[int,neat.genome.DefaultGenome]],config):
         self.terrain_points = []
         self.landers        = []
         self.run_counter   += 1
@@ -168,6 +169,12 @@ class GeneticSimulation:
             if file.tell() == 0:
                 writer.writerow(['Run','Avg Dist','Avg Speed','Avg Fitness'])
             writer.writerow([self.run_counter,avg_distance, avg_velocity, avg_fitness])
+        
+        for genome_id, genome in genomes:
+            for lander in self.landers:
+                if lander.genome_id == genome_id:
+                    genome.fitness = lander.fitness
+            #print(genome.fitness)
               
     def generate_terrain_points(self):
         noise_func = Noise()
