@@ -3,7 +3,6 @@ import neat
 import pymunk
 import pygame
 import random
-from utils import Noise, generate_noise, pairwise, plot_stats, plot_species
 
 class Categories:
     LANDER_CAT  = 0b01
@@ -40,7 +39,7 @@ class SmokeEmitter:
 
     def emit(self, position):
         velocity = [random.uniform(-1, 1), random.uniform(-2, 0)]
-        life_time = 1  # You can adjust this as needed
+        life_time = 1.5  # You can adjust this as needed
         self.particles.append(SmokeParticle(list(position), velocity, life_time, self.particle_surface))
 
     def update_and_draw(self, dt):
@@ -55,7 +54,7 @@ class SmokeEmitter:
             else:
                 self.particles.pop(i) 
 
-class Lander:
+class TwinFlameCan:
     def __init__(self,
                  position  : tuple[int,int],
                  screen    : pygame.Surface,
@@ -89,10 +88,10 @@ class Lander:
         
         ####### FUEL, THRUST AND MASS #######
         
-        self.dry_mass       = 500
-        self.max_fuel       = 1000
+        self.dry_mass       = 626
+        self.max_fuel       = 845
         self.fuel           = self.max_fuel
-        self.thrust         = 500000
+        self.thrust         = 800000
         self.consume_rate   = 2
         self.engine_force_l = 0
         self.engine_force_r = 0
@@ -154,6 +153,7 @@ class Lander:
         self.velocity_y       = self.body.velocity[1]
         self.killed_by_roll   = False
         self.killed_by_flying = False
+        self.killed_by_speed  = False 
         self.roll_percentage  = 1.0                                      # Amount of roll [0 to 1]
         self.roll_penalty     = 0                                        # Penalty for exceeding tilt angle
         self.scan_probe_l     = 0                                        # Gives nearest terrain Left
@@ -192,12 +192,12 @@ class Lander:
             self.velocity_y       = self.body.velocity[1]
         
         if self.has_collided:
-            self.fitness = 0.5 * ((self.dist_to_landing**2) + (self.abs_velocity**2))
+            self.fitness = 500 * (1 - math.exp(-0.01 * math.sqrt(self.dist_to_landing**2 + self.abs_velocity**2)))
         else:
-            self.fitness = (self.dist_to_landing**2) + (self.abs_velocity**2) + 5
+            self.fitness = 500 * (1 - math.exp(-0.01 * math.sqrt(self.dist_to_landing**2 + self.abs_velocity**2))) + 2000 
             
         if self.killed_by_roll:
-            self.fitness = self.infinity_value**2
+            self.fitness += self.infinity_value**2
             
         if not self.alive:
             return
@@ -223,26 +223,25 @@ class Lander:
                                                       #self.scan_probe_l,
                                                       #self.scan_probe_r,
                                                       self.x_dist_deviation,
-                                                      self.y_dist_deviation,
+                                                      #self.y_dist_deviation,
                                                       #distance_corner_r,
                                                       #self.x_pos,
                                                       #self.y_pos,
                                                       self.velocity_x,
                                                       self.velocity_y,
                                                       self.angular_velocity,
-                                                      #self.fuel
+                                                      self.fuel
                                                       ])
         eng_l_out_raw = engine_throttle_data[0]
         eng_r_out_raw = engine_throttle_data[1]
         
         if self.fuel > 0:
-            self.engine_force_l = (eng_l_out_raw+1)/2
-            self.engine_force_r = (eng_r_out_raw+1)/2
+            self.engine_force_l = sorted((0, (eng_l_out_raw+1)/2, 1))[1]
+            self.engine_force_r = sorted((0, (eng_r_out_raw+1)/2, 1))[1]
             
             self.fuel                  -= (self.engine_force_l * self.consume_rate)
             self.fuel                  -= (self.engine_force_r * self.consume_rate)
-            self.center_fuel_span.mass -= (self.engine_force_l * self.consume_rate)
-            self.center_fuel_span.mass -= (self.engine_force_r * self.consume_rate)
+            self.center_fuel_span.mass  = self.fuel
         else:
             self.engine_force_l = 0
             self.engine_force_r = 0
@@ -317,6 +316,7 @@ class Lander:
 
         self.has_collided = True
         if self.velocity_x > self.max_land_vel_x or self.velocity_y > self.max_land_vel_y:
+            self.killed_by_speed = True
             self.kill()
         self.update()
         self.draw()
@@ -384,7 +384,7 @@ class Lander:
     def evaluate_lander(self):
         return [self.dist_to_landing,self.abs_velocity,self.fitness]
     
-class LanderVariant1(Lander):
+class PulseRocker(TwinFlameCan):
     def __init__(self,
                  position  : tuple[int,int],
                  screen    : pygame.Surface,
@@ -397,12 +397,13 @@ class LanderVariant1(Lander):
         
         super().__init__(position, screen, space, genome_id, network, genome, target_zone, terrain_data)
         
+        ####### FUEL, THRUST AND MASS #######
         
+        self.dry_mass       = 626
+        self.max_fuel       = 845
+        self.fuel           = self.max_fuel
+        self.thrust         = 800000
         self.engine_force_m = 0
-        self.dry_mass = 626
-        self.max_fuel = 845
-        self.fuel = self.max_fuel
-        self.thrust = 800000
         
     def update(self):
         self.angle = self.body.angle
@@ -425,15 +426,13 @@ class LanderVariant1(Lander):
         
 
         if self.has_collided:
-            self.fitness =500 * (1 - math.exp(-0.01 * math.sqrt(self.dist_to_landing**2 + self.abs_velocity**2))) #0.5 * ((self.dist_to_landing**2) + (self.abs_velocity**2))#2**(self.dist_to_landing/1000) + 3**(self.abs_velocity/1000)
+            self.fitness = 500 * (1 - math.exp(-0.01 * math.sqrt(self.dist_to_landing**2 + self.abs_velocity**2)))
         else:
-            self.fitness = 500 * (1 - math.exp(-0.01 * math.sqrt(self.dist_to_landing**2 + self.abs_velocity**2))) + 2000 #((self.dist_to_landing**2) + (self.abs_velocity**2)) + 5#2**(self.dist_to_landing/1000) + 5
+            self.fitness = 500 * (1 - math.exp(-0.01 * math.sqrt(self.dist_to_landing**2 + self.abs_velocity**2))) + 2000 
             
         if self.killed_by_roll:
-            self.fitness = self.infinity_value**2
-            
-        if self.killed_by_flying:
-            self.fitness = self.infinity_value**2
+            self.fitness += self.infinity_value**2
+
             
         if not self.alive:
             return
@@ -442,10 +441,7 @@ class LanderVariant1(Lander):
         if self.roll_percentage > 0.5:
             self.killed_by_roll = True
             self.kill()
-            
-        if self.abs_velocity>700:
-            self.kill()
-        
+                 
         self.scan_probe_l, self.scan_probe_r = self.get_terrain_scanner_readings()
         
         self.x_dist_deviation = x2 - x1
@@ -462,15 +458,15 @@ class LanderVariant1(Lander):
         engine_throttle_data = self.network.activate([self.altitude,
                                                       #self.scan_probe_l,
                                                       #self.scan_probe_r,
-                                                      self.x_dist_deviation**3,
-                                                      self.y_dist_deviation**3,
+                                                      self.x_dist_deviation,
+                                                      #self.y_dist_deviation,
                                                       #distance_corner_r,
                                                       #self.x_pos,
                                                       #self.y_pos,
                                                       self.velocity_x,
                                                       self.velocity_y,
                                                       self.angular_velocity,
-                                                      #self.fuel
+                                                      self.fuel
                                                       ])
         eng_l_out_raw = engine_throttle_data[0]
         eng_r_out_raw = engine_throttle_data[1]
@@ -499,11 +495,11 @@ class LanderVariant1(Lander):
         fxm = force * math.sin(-self.angle)
         fym = force * math.cos(-self.angle)
         
-        fxl = fym     / 2
-        fyl = -fxm    / 2
+        fxr = fym     / 2
+        fyr = -fxm    / 2
         
-        fxr = -fym    / 2
-        fyr = fxm     / 2
+        fxl = -fym    / 2
+        fyl = fxm     / 2
         
         fxm = self.engine_force_m * fxm
         fym = self.engine_force_m * fym
@@ -537,6 +533,10 @@ class LanderVariant1(Lander):
             self.skin = self.lander_right_engine_on
             self.smoke.emit(self.body.local_to_world(self.center_fuel_span.b))
         
+        if self.engine_force_m > 0.1:
+            self.skin = self.lander_both_engine_on
+            self.smoke.emit(self.body.local_to_world(self.center_fuel_span.center_of_gravity))
+        
         self.smoke.update_and_draw(1/30)
         
         fuel_percentage = max(0, min(1, self.fuel / self.max_fuel))
@@ -548,20 +548,16 @@ class LanderVariant1(Lander):
         pygame.draw.rect(self.screen, (255, 0, 0), (fuel_bar_x, fuel_bar_y, fuel_bar_width, fuel_bar_height))
         pygame.draw.rect(self.screen, (0, 255, 0), (fuel_bar_x, fuel_bar_y, fuel_bar_width * fuel_percentage, fuel_bar_height))
         
-        speed_text = self.font.render(f'V: {self.abs_velocity:.2f}', True, (255, 255, 255))
-        speed_text_rect = speed_text.get_rect(center=(fuel_bar_x+15, fuel_bar_y-15))
+        speed_text = self.font.render(f'Vel: {self.abs_velocity:.2f}', True, (255, 255, 255))
+        speed_text_rect = speed_text.get_rect(center=(fuel_bar_x, fuel_bar_y-20))
 
-        fitness_text = self.font.render(f'F: {self.fitness:.2f}', True, (255, 255, 255))
-        fitness_text_rect = fitness_text.get_rect(center=(fuel_bar_x+15, fuel_bar_y-25))
+        fitness_text = self.font.render(f'Fitness: {self.fitness:.2f}', True, (255, 255, 255))
+        fitness_text_rect = fitness_text.get_rect(center=(fuel_bar_x, fuel_bar_y-30))
             
-        #eng_text = self.font.render(f'P: {self.engine_force_l:.2f}L {self.engine_force_r:.2f}R {self.engine_force_m:.2f}M', True, (255, 255, 255))
-        #eng_text_rect = eng_text.get_rect(center=(fuel_bar_x+15, fuel_bar_y-40))
-        
-        #species_text = self.font.render(f'S: {self.genome.size()}', True, (255, 255, 255))
-        #species_text_rect = species_text.get_rect(center=(fuel_bar_x, fuel_bar_y-50))
+        eng_text = self.font.render(f'Pow: {self.engine_force_l:.2f}L {self.engine_force_r:.2f}R', True, (255, 255, 255))
+        eng_text_rect = eng_text.get_rect(center=(fuel_bar_x, fuel_bar_y-40))
         
         self.screen.blit(speed_text, speed_text_rect)
         self.screen.blit(fitness_text, fitness_text_rect)
-        #self.screen.blit(eng_text, eng_text_rect)
-        #self.screen.blit(species_text, species_text_rect)
+        self.screen.blit(eng_text, eng_text_rect)
         self.screen.blit(rotated_image, rotated_rect)

@@ -9,11 +9,12 @@ import pygame.gfxdraw
 import pymunk
 import datetime
 
-from lander import Categories, Lander, LanderVariant1
+from lander import Categories, TwinFlameCan, PulseRocker
 from utils import plot_stats,plot_species,pairwise,Noise
 
 class GeneticSimulation:
     def __init__(self,
+                 config_file   : str,
                  generations   : int = 5000,
                  screen_width  : int = 1920,
                  screen_height : int = 1080,
@@ -52,15 +53,19 @@ class GeneticSimulation:
         self.lander_spawn_y    = 100                    # 100 to 500 recommended. Spawns lander at this y-coordinate
         self.no_spawn_margin_x = 500                    # Prevents any lander spawning in +- of this range
     
-        self.neat_config_path = "neat_config.ini"       # Path to neat configuration file
+        self.neat_config_path = config_file       # Path to neat configuration file
         self.run_folder       = f'runs/{datetime.datetime.now()}'
         self.fitness_file     = f'{self.run_folder}/fitness_data.csv'
         self.generation_count = generations
         self.run_counter      = 0
         
-        
         self.collion_handler = self.space.add_collision_handler(Categories.LANDER_CAT,Categories.TERRAIN_CAT)
         self.collion_handler.post_solve = self.handle_collision
+        
+        if "L-PR" in self.neat_config_path:
+            self.lander_class = PulseRocker
+        elif "L-TFC" in self.neat_config_path:
+            self.lander_class = TwinFlameCan
      
     def run(self,resume_path : str = None):
         
@@ -108,7 +113,7 @@ class GeneticSimulation:
             y = self.lander_spawn_y
             
             self.landers.append(
-                LanderVariant1((x,y),
+                self.lander_class((x,y),
                        self.screen,
                        self.space,
                        genome_id,
