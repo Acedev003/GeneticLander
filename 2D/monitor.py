@@ -1,4 +1,5 @@
 import io
+import sys
 import base64
 import argparse
 import pandas as pd
@@ -50,4 +51,4 @@ if __name__ == '__main__':
     
     csv_file_path = args.csv_file
     
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host='0.0.0.0', port=int(sys.argv[1]))
