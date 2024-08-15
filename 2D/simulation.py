@@ -4,16 +4,18 @@ import neat
 import time
 import random
 import pygame
+import pygame.gfxdraw
 import pymunk
+import datetime
 
-from lander import Categories, Lander
+from lander import Categories, Lander, LanderVariant1
 from utils import plot_stats,plot_species,pairwise,Noise
 
 class GeneticSimulation:
     def __init__(self,
                  generations   : int = 5000,
-                 screen_width  : int = 1280,
-                 screen_height : int = 720,
+                 screen_width  : int = 1920,
+                 screen_height : int = 1080,
                  headless      : bool = False
                  ):
         
@@ -34,12 +36,13 @@ class GeneticSimulation:
         
         self.terrain_points       = []
         self.terrain_break_count  = 50                  # Number of polygons to make terrain
-        self.terrain_complexity   = 300                 # Perlin noise param. Higher gives steeper variations
+        self.terrain_complexity   = 200                 # Perlin noise param. Higher gives steeper variations
         self.min_terrain_altitude = 10                  # Lowest height of generated terrain
         self.terrain_screen_prcnt = 0.8                 # 0.5 to 0.8 recommended. Terrain height base as a percentage of screen.
         self.terrain_friction     = 0.9
+        self.terrain_texture      = pygame.image.load("assets/moon2.png").convert()
         
-        self.gravity        = 3.6742                    # Acceleration due to gravity
+        self.gravity        = 1.625                     # Acceleration due to gravity
         
         self.space          = pymunk.Space()
         self.space.gravity  = (0, self.gravity*100)
@@ -48,8 +51,9 @@ class GeneticSimulation:
         self.lander_spawn_y    = 100                    # 100 to 500 recommended. Spawns lander at this y-coordinate
         self.no_spawn_margin_x = 500                    # Prevents any lander spawning in +- of this range
     
-        self.neat_config_path = "neat_config.ini"       # Path to neat configuration file 
-        self.fitness_file     = f'runs/fitness_data_run-{int(time.time())}.csv'
+        self.neat_config_path = "neat_config.ini"       # Path to neat configuration file
+        self.run_folder       = f'runs/{datetime.datetime.now()}'
+        self.fitness_file     = f'{self.run_folder}/fitness_data.csv'
         self.generation_count = generations
         self.run_counter      = 0
         
@@ -58,6 +62,9 @@ class GeneticSimulation:
         self.collion_handler.post_solve = self.handle_collision
      
     def run(self,resume_path : str = None):
+        
+        os.mkdir(self.run_folder)
+        
         config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                              neat.DefaultSpeciesSet, neat.DefaultStagnation,
                              self.neat_config_path)
@@ -69,7 +76,7 @@ class GeneticSimulation:
         stats = neat.StatisticsReporter()
         population.add_reporter(stats)
         population.add_reporter(neat.StdOutReporter(True))
-        population.add_reporter(neat.Checkpointer(10,filename_prefix="checkpoints/ckpt-"))
+        population.add_reporter(neat.Checkpointer(10,filename_prefix=f"{self.run_folder}/ckpt-"))
         
         winner = population.run(self.run_simulation, self.generation_count)
         
@@ -100,7 +107,7 @@ class GeneticSimulation:
             y = self.lander_spawn_y
             
             self.landers.append(
-                Lander((x,y),
+                LanderVariant1((x,y),
                        self.screen,
                        self.space,
                        genome_id,
@@ -115,6 +122,7 @@ class GeneticSimulation:
         running = True
         paused  = False
         while running:
+            running = any(lander.has_life() and not lander.get_collision_status() for lander in self.landers)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     exit()
@@ -128,7 +136,7 @@ class GeneticSimulation:
             self.screen.fill('BLACK')
             self.draw_terrain()
             
-            pygame.draw.circle(self.screen, (255,255,0), self.landing_zone, 5)
+            pygame.draw.circle(self.screen, (0,255,0), self.landing_zone, 5)
             
             for lander in self.landers:
                 lander.update()
@@ -138,7 +146,7 @@ class GeneticSimulation:
             self.space.step(self.dt)        
             self.clock.tick(self.fps)
             
-            running = any(lander.has_life() and not lander.get_collision_status() for lander in self.landers)
+            
 
         self.remove_terrain()
 
@@ -275,7 +283,8 @@ class GeneticSimulation:
         if not self.terrain_points:
             return
         
-        pygame.draw.polygon(self.screen, (255, 255, 255), self.terrain_points)
+        pygame.gfxdraw.textured_polygon(self.screen,self.terrain_points,self.terrain_texture,0,0)
+        #pygame.draw.polygon(self.screen, (255, 255, 255), self.terrain_points)
     
     def handle_collision(self,arbiter,space,data):
         shapes = arbiter.shapes
