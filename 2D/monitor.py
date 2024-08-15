@@ -47,8 +47,9 @@ def plot_csv():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Flask app to plot live data from a CSV file.")
     parser.add_argument('csv_file', type=str, help="Path to the CSV file")
+    parser.add_argument('port', type=int, help="Port no to use")
     args = parser.parse_args()
     
     csv_file_path = args.csv_file
     
-    app.run(host='0.0.0.0', port=int(sys.argv[1]))
+    app.run(host='0.0.0.0', port=args.port)
