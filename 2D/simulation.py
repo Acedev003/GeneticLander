@@ -40,7 +40,7 @@ class GeneticSimulation:
         self.min_terrain_altitude = 10                  # Lowest height of generated terrain
         self.terrain_screen_prcnt = 0.8                 # 0.5 to 0.8 recommended. Terrain height base as a percentage of screen.
         self.terrain_friction     = 0.9
-        self.terrain_texture      = pygame.image.load("assets/moon2.png").convert()
+        self.terrain_texture      = pygame.image.load("assets/moon.png").convert()
         
         self.gravity        = 1.625                     # Acceleration due to gravity
         
