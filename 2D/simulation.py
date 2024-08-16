@@ -163,8 +163,7 @@ class GeneticSimulation:
             self.screen.fill('BLACK')
             if not self.headless:
                 self.draw_terrain()
-            
-            pygame.draw.circle(self.screen, (0,255,0), self.landing_zone, 5)
+                pygame.draw.circle(self.screen, (0,255,0), self.landing_zone, 5)
             
             for lander in self.landers:
                 lander.update()
