@@ -159,8 +159,8 @@ class TwinFlameCan:
         self.x_dist_deviation = 0                                        # x deviation from target
         self.y_dist_deviation = 0                                        # y deviation from target
  
-        self.max_land_vel_x   = 141.421                                  # Max tolerable landing velocity
-        self.max_land_vel_y   = 141.421                                  # Max tolerable landing velocity
+        self.max_land_vel_x   = 241.421                                  # Max tolerable landing velocity
+        self.max_land_vel_y   = 241.421                                  # Max tolerable landing velocity
          
         self.fitness          = -self.infinity_value                     # Fitness Score
         self.dist_to_landing  =  self.infinity_value                     # Distance to landing zone
@@ -201,7 +201,7 @@ class TwinFlameCan:
             self.killed_by_roll = True
             self.kill()
         
-        self.scan_probe_l, self.scan_probe_r = self.get_terrain_scanner_readings()
+        #self.scan_probe_l, self.scan_probe_r = self.get_terrain_scanner_readings()
         
         self.x_dist_deviation = x2 - x1
         self.y_dist_deviation = y2 - y1
@@ -399,7 +399,7 @@ class PulseRocker(TwinFlameCan):
         self.dry_mass       = 626
         self.max_fuel       = 845
         self.fuel           = self.max_fuel
-        self.thrust         = 800000
+        self.thrust         = 900000
         self.engine_force_m = 0
         
     def update(self):
@@ -439,7 +439,7 @@ class PulseRocker(TwinFlameCan):
             self.killed_by_roll = True
             self.kill()
                  
-        self.scan_probe_l, self.scan_probe_r = self.get_terrain_scanner_readings()
+        #self.scan_probe_l, self.scan_probe_r = self.get_terrain_scanner_readings()
         
         self.x_dist_deviation = x2 - x1
         self.y_dist_deviation = y2 - y1
