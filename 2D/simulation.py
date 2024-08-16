@@ -27,9 +27,10 @@ class GeneticSimulation:
         pygame.init()
         pygame.display.set_caption('Planetary Lander Evolution')
             
-        self.screen = pygame.display.set_mode((screen_width, screen_height))
-        self.width  = screen_width
-        self.height = screen_height
+        self.screen   = pygame.display.set_mode((screen_width, screen_height))
+        self.width    = screen_width
+        self.height   = screen_height
+        self.headless = headless
             
         self.fps     = 24                               # Lower FPS boosts performance but may cause jitter
         
@@ -102,6 +103,7 @@ class GeneticSimulation:
         plot_species(stats, view=True)     
     
     def run_simulation(self,genomes: list[tuple[int,neat.genome.DefaultGenome]],config):
+        start_time = time.time()
         self.terrain_points = []
         self.landers        = []
         self.run_counter   += 1
@@ -159,20 +161,20 @@ class GeneticSimulation:
                 continue
             
             self.screen.fill('BLACK')
-            self.draw_terrain()
+            if not self.headless:
+                self.draw_terrain()
             
             pygame.draw.circle(self.screen, (0,255,0), self.landing_zone, 5)
             
             for lander in self.landers:
                 lander.update()
-                lander.draw()
+                if not self.headless:
+                    lander.draw()
             
             pygame.display.flip()
             self.space.step(self.dt)        
             self.clock.tick(self.fps)
             
-            
-
         self.remove_terrain()
 
         dist_sum, vel_sum, fit_sum = 0 , 0 , 0
@@ -199,7 +201,10 @@ class GeneticSimulation:
                 if lander.genome_id == genome_id:
                     genome.fitness = lander.fitness
             #print(genome.fitness)
-              
+        
+        end_time = time.time()
+        print('TIME FOR RUN:',end_time-start_time)
+           
     def generate_terrain_points(self):
         noise_func = Noise()
         terrain_break_heights = [ noise_func.generate_noise([x/self.terrain_break_count,0]) 
