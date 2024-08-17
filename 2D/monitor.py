@@ -1,56 +1,46 @@
-import io
-import sys
-import base64
 import argparse
 import pandas as pd
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from flask import Flask, render_template_string
+import plotille
+import os
+import time
 
-app = Flask(__name__)
-csv_file_path = None
+def plot_csv(df, fitness_only):
+    fig = plotille.Figure()
+    fig.width = 40
+    fig.height = 20
+    fig.set_x_limits(min_=int(df['Run'].min()), max_=int(df['Run'].max()))
+    
+    if fitness_only:
+        y_min = df['Avg Fitness'].min()
+        y_max = df['Avg Fitness'].max()
+    else:
+        y_min = min(df['Avg Dist'].min(), df['Avg Speed'].min(), df['Avg Fitness'].min())
+        y_max = max(df['Avg Dist'].max(), df['Avg Speed'].max(), df['Avg Fitness'].max())
+    
+    fig.set_y_limits(min_=y_min, max_=y_max)
+    fig.color_mode = 'byte'
 
-@app.route('/')
-def plot_csv():
-    df = pd.read_csv(csv_file_path)
+    if fitness_only:
+        fig.plot(df['Run'], df['Avg Fitness'], lc=200, label='Avg Fitness')
+    else:
+        fig.plot(df['Run'], df['Avg Dist'], lc=100, label='Avg Dist')
+        fig.plot(df['Run'], df['Avg Speed'], lc=150, label='Avg Speed')
+        fig.plot(df['Run'], df['Avg Fitness'], lc=200, label='Avg Fitness')
     
-    plt.figure()
-    plt.plot(df['Run'], df['Avg Dist'], label='Avg Dist')
-    plt.plot(df['Run'], df['Avg Speed'], label='Avg Speed')
-    plt.plot(df['Run'], df['Avg Fitness'], label='Avg Fitness')
-    plt.xlabel('Run')
-    plt.ylabel('Value')
-    plt.legend()
-    plt.title('Live Data Plot')
-    
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-    plt.close()
+    os.system('clear')  # Clear the terminal screen
+    print(fig.show(legend=True))
 
-    html = '''
-    <html>
-    <head>
-        <title>Live Data Plot</title>
-        <meta http-equiv="refresh" content="60">
-    </head>
-    <body>
-        <h4>{{csv_file_path}}</h4>
-        <img src="data:image/png;base64,{{ plot_data }}" />
-    </body>
-    </html>
-    '''
-    plot_data = base64.b64encode(buf.getvalue()).decode('utf-8')
-    
-    return render_template_string(html, plot_data=plot_data,csv_file_path=csv_file_path)
+def live_plot(csv_file_path, interval=15.0, fitness_only=False):
+    while True:
+        df = pd.read_csv(csv_file_path)
+        plot_csv(df, fitness_only)
+        time.sleep(interval)  # Wait for the specified interval before updating the plot
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Flask app to plot live data from a CSV file.")
+    parser = argparse.ArgumentParser(description="Script to plot data from a run fitness file")
     parser.add_argument('csv_file', type=str, help="Path to the CSV file")
-    parser.add_argument('port', type=int, help="Port no to use")
+    parser.add_argument('--interval', type=float, default=15.0, help="Time interval between updates in seconds")
+    parser.add_argument('--fitness-only', action='store_true', help="Plot only Avg Fitness data")
     args = parser.parse_args()
     
-    csv_file_path = args.csv_file
-    
-    app.run(host='0.0.0.0', port=args.port)
+    live_plot(args.csv_file, args.interval, args.fitness_only)
