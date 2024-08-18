@@ -2,6 +2,7 @@ import os
 import csv
 import neat
 import time
+import pickle
 import random
 import neat.genome
 import pygame
@@ -77,6 +78,8 @@ class GeneticSimulation:
         self.generation_count = generations
         self.run_counter      = 0
         
+        print("FITNESS FILE PATH:",self.fitness_file)
+        
         self.collion_handler = self.space.add_collision_handler(Categories.LANDER_CAT,Categories.TERRAIN_CAT)
         self.collion_handler.post_solve = self.handle_collision
      
@@ -98,7 +101,8 @@ class GeneticSimulation:
         population.add_reporter(neat.Checkpointer(10,filename_prefix=f"{self.run_folder}/ckpt-"))
         
         winner = population.run(self.run_simulation, self.generation_count)
-        
+        pickle.dump(winner, open(os.path.join(self.run_folder, 'winner.pkl'), 'wb'))
+
         plot_stats(stats, ylog=False, view=True)
         plot_species(stats, view=True)     
     
@@ -335,3 +339,36 @@ class GeneticSimulation:
                 
             
     
+    
+class GeneticSimulation2(GeneticSimulation):
+    def __init__(self,
+                 config_file   : str,
+                 generations   : int = 5000,
+                 screen_width  : int = 1920,
+                 screen_height : int = 1080,
+                 headless      : bool = False
+                 ):
+        super().__init__(config_file,generations,screen_width,screen_height,headless)
+        
+    
+    def run(self,resume_path : str = None):
+        os.mkdir(self.run_folder)
+        
+        config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                             neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                             self.neat_config_path)
+        if resume_path:
+            population = neat.Checkpointer().restore_checkpoint(resume_path)
+        else:
+            population = neat.Population(config)
+        
+        stats = neat.StatisticsReporter()
+        population.add_reporter(stats)
+        population.add_reporter(neat.StdOutReporter(True))
+        population.add_reporter(neat.Checkpointer(10,filename_prefix=f"{self.run_folder}/ckpt-"))
+        
+        winner = population.run(self.run_simulation, 10)
+        
+        best_genomes = stats.best_unique_genomes(3)
+        
+        
