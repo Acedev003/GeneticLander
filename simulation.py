@@ -337,38 +337,3 @@ class GeneticSimulation:
                 if lander.get_body_id() in ids:
                     lander.set_collided()
                 
-            
-    
-    
-class GeneticSimulation2(GeneticSimulation):
-    def __init__(self,
-                 config_file   : str,
-                 generations   : int = 5000,
-                 screen_width  : int = 1920,
-                 screen_height : int = 1080,
-                 headless      : bool = False
-                 ):
-        super().__init__(config_file,generations,screen_width,screen_height,headless)
-        
-    
-    def run(self,resume_path : str = None):
-        os.mkdir(self.run_folder)
-        
-        config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                             neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                             self.neat_config_path)
-        if resume_path:
-            population = neat.Checkpointer().restore_checkpoint(resume_path)
-        else:
-            population = neat.Population(config)
-        
-        stats = neat.StatisticsReporter()
-        population.add_reporter(stats)
-        population.add_reporter(neat.StdOutReporter(True))
-        population.add_reporter(neat.Checkpointer(10,filename_prefix=f"{self.run_folder}/ckpt-"))
-        
-        winner = population.run(self.run_simulation, 10)
-        
-        best_genomes = stats.best_unique_genomes(3)
-        
-        
