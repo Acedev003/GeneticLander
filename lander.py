@@ -74,13 +74,23 @@ class TwinFlameCan2:
         self.space.add(self.body)
         self.space.add(self.shape)
 
+        self.lander_texture = pygame.image.load("assets/Lander.png").convert_alpha()
+
     def update(self):
         pass
 
     def draw(self):
+        # if not self.alive:
+        #     return
+        
         p = int(self.body.position.x), int(self.body.position.y)
         pygame.draw.circle(self.screen, (0,0,255), p, 10, 2)
 
+        angle_degrees = math.degrees(self.body.angle)
+        rotated_image = pygame.transform.rotate(self.lander_texture, -angle_degrees)
+        rotated_rect  = rotated_image.get_rect(center=p)
+        self.screen.blit(rotated_image, rotated_rect)
+    
 class TwinFlameCan:
     def __init__(self,
                  position  : tuple[int,int],

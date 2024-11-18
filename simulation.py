@@ -95,7 +95,7 @@ class GeneticSimulation2:
             self.__draw_terrain()
             for lander in landers:
                 lander.draw()
-            self.space.debug_draw(draw_options)
+            #self.space.debug_draw(draw_options)
             self.space.step(1/(self.fps))
             pygame.display.flip()
             self.clock.tick(self.fps)      
@@ -121,7 +121,7 @@ class GeneticSimulation2:
         self.terrain["body"] = pymunk.Body(body_type = pymunk.Body.STATIC)
         self.terrain["body"].position = self.terrain["segment_coords"][0][0]
 
-        self.terrain["segments"] = [pymunk.Segment(self.terrain["body"], (x[0][0],-self.virt_height+x[0][1]), (x[1][0],-self.virt_height+x[1][1]), 10) for x in self.terrain["segment_coords"]]
+        self.terrain["segments"] = [pymunk.Segment(self.terrain["body"], (x[0][0],-self.virt_height+x[0][1]+5), (x[1][0],-self.virt_height+x[1][1]+5), 5) for x in self.terrain["segment_coords"]]
 
         self.space.add(self.terrain['body'])
         for x in self.terrain["segments"]:
