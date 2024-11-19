@@ -9,47 +9,54 @@ import pygame
 import pygame.gfxdraw
 import pymunk
 import datetime
+import configparser
 
 from pymunk.pygame_util import DrawOptions
 
-
-from lander import Categories, TwinFlameCan,TwinFlameCan2, PulseRocker
+from lander import Categories, TwinFlameCan,TwinFlameCan2
 from utils import plot_stats,plot_species,pairwise,Noise
 
 class GeneticSimulation2:
     def __init__(self,
-                 config_file   : str,
-                 generations   : int = 5000,
-                 screen_width  : int = 1920,
-                 screen_height : int = 1080,
-                 headless      : bool = False
-                 ):
+                 simulation_config_file : str,
+                 lander_config_file  : str,
+                 terrain_config_file : str,
+                 headless       : bool = False):
+        
         if headless:
             os.environ["SDL_VIDEODRIVER"] = "dummy" 
+
+        self.simulation_config = configparser.ConfigParser()
+        self.lander_config     = configparser.ConfigParser()
+        self.terrain_config    = configparser.ConfigParser()
+
+        self.simulation_config.read(simulation_config_file)
+        self.lander_config.read(lander_config_file)
+        self.terrain_config.read(terrain_config_file)
 
         pygame.init()
         pygame.display.set_caption('Genetic Lander')
 
-        self.screen   = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)#pygame.display.set_mode((screen_width, screen_height))
+        self.width    = int(self.simulation_config['SIMULATION']['WIDTH'])
+        self.height   = int(self.simulation_config['SIMULATION']['HEIGHT'])
+        self.headless = bool(self.simulation_config['SIMULATION']['HEADLESS'])
+        
+        self.screen   = pygame.display.set_mode((self.width, self.height))
         self.clock    = pygame.time.Clock()
-        self.width    = screen_width
-        self.height   = screen_height
-        self.headless = headless
 
-        self.terrain = {}
+        self.terrain = {
+            "texture" : pygame.image.load(self.terrain_config['CONFIG']['texture']).convert(),
+            "body": None,
+            "segments" : [],
+            "segment_coords" : [],
+            "segment_length" : int(self.terrain_config['CONFIG']['segment_length'])
+        }
 
-        self.terrain["texture"]        = pygame.image.load("assets/moon.png").convert()
-        self.terrain["segment_coords"] = []
-        self.terrain["segment_length"] = 70
-        self.terrain["body"]           = None
-        self.terrain["segments"]       = []
+        self.fps = int(self.simulation_config['SIMULATION']['FPS'])
 
-        self.fps = 24
-
-        self.gravity        = 1.625                  # Acceleration due to gravity
-
+        self.gravity        = float(self.simulation_config['SIMULATION']['GRAVITY'])
         self.space          = pymunk.Space()
-        self.space.gravity = (0, self.gravity*100)
+        self.space.gravity  = (0, self.gravity*100)
 
         self.category = {
             "terrain": 0b01,
@@ -59,7 +66,7 @@ class GeneticSimulation2:
         self.mask = {
             "terrain": 0b10,
             "lander":  0b01
-        } 
+        }
 
     def run(self):
         self.simulation()            
@@ -69,10 +76,12 @@ class GeneticSimulation2:
         self.__generate_terrain()
 
         landers = []
-        lander_count = 2000
+        lander_count = int(self.simulation_config['SIMULATION']['POPULATION_SIZE'])
+
         for i in range(lander_count):
-            landers.append(TwinFlameCan2(self.screen,self.space))
-            landers[i].shape.filter = pymunk.ShapeFilter(categories = self.category['lander'], mask=self.mask['lander'])
+            lander = TwinFlameCan2(self.screen,self.space,self.lander_config)
+            lander.shape.filter = pymunk.ShapeFilter(categories = self.category['lander'], mask=self.mask['lander'])
+            landers.append(lander)
 
         running = True
         paused  = False
@@ -89,8 +98,10 @@ class GeneticSimulation2:
             if paused:
                 continue
             
+            for lander in landers:
+                lander.update()
+
             self.screen.fill('BLACK')      
-            
 
             self.__draw_terrain()
             for lander in landers:
@@ -121,7 +132,7 @@ class GeneticSimulation2:
         self.terrain["body"] = pymunk.Body(body_type = pymunk.Body.STATIC)
         self.terrain["body"].position = self.terrain["segment_coords"][0][0]
 
-        self.terrain["segments"] = [pymunk.Segment(self.terrain["body"], (x[0][0],-self.virt_height+x[0][1]+5), (x[1][0],-self.virt_height+x[1][1]+5), 5) for x in self.terrain["segment_coords"]]
+        self.terrain["segments"] = [pymunk.Segment(self.terrain["body"], (x[0][0],-self.virt_height+x[0][1]+10), (x[1][0],-self.virt_height+x[1][1]+10), 10) for x in self.terrain["segment_coords"]]
 
         self.space.add(self.terrain['body'])
         for x in self.terrain["segments"]:

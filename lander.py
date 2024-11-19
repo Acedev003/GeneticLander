@@ -56,35 +56,55 @@ class SmokeEmitter:
 
 class TwinFlameCan2:
     def __init__(self,
-                 screen,
-                 space):
+                 screen:pygame.Surface,
+                 space,
+                 config):
         
-        self.space = space
+        self.space  = space
         self.screen = screen
+        self.config = config
         self.body  = pymunk.Body()
-        self.body.position = (random.randint(100,1200),50)
+        self.body.position = (random.randint(100,self.screen.get_width()-100),int(self.config['SIMULATION']['spawn_height']))
+        
         w, h = 50, 50
-
-        vs = [(-w/2,-h/2), (w/2,-h/2), (w/2,h/2), (-w/2,h/2)]
+        vs   = [(-w/2+5,-h/2), (w/2-5,-h/2), (w/2,h/2), (-w/2,h/2)]
 
         self.shape = pymunk.Poly(self.body, vs)
-        self.shape.mass = 100
+        self.shape.mass = int(self.config['LANDER']['weight'])
         self.shape.friction = 1
         self.shape.collision_type = 1
         self.space.add(self.body)
         self.space.add(self.shape)
 
-        self.lander_texture = pygame.image.load("assets/Lander.png").convert_alpha()
+        self.texture_default      = pygame.image.load(self.config['LANDER']['texture_default']).convert_alpha()
+        self.texture_left_engine  = pygame.image.load(self.config['LANDER']['texture_left_engine']).convert_alpha()
+        self.texture_right_engine = pygame.image.load(self.config['LANDER']['texture_right_engine']).convert_alpha()
+        self.texture_both_engine  = pygame.image.load(self.config['LANDER']['texture_both_engine']).convert_alpha()
+
+        self.lander_texture = self.texture_default
+
+        max_init_velocity = int(self.config['SIMULATION']['max_init_velocity'])
+        max_init_angle = int(self.config['SIMULATION']['max_init_angle_deg'])
+
+        self.body.velocity = [random.randint(0,max_init_velocity),random.randint(0,max_init_velocity)]
+        self.body.angle    = math.radians(random.randint(-max_init_angle,max_init_angle))
+
+        self.engine_force  = int(self.config['LANDER']['max_engine_power'])
+        
+        self.alive = True
 
     def update(self):
-        pass
+        if not self.alive:
+            return
+        
+        self.body.apply_force_at_local_point((0,-100),(-10,50))
+        self.body.apply_force_at_local_point((0,-00),(10,50))
 
     def draw(self):
-        # if not self.alive:
-        #     return
+        if not self.alive:
+            return
         
         p = int(self.body.position.x), int(self.body.position.y)
-        pygame.draw.circle(self.screen, (0,0,255), p, 10, 2)
 
         angle_degrees = math.degrees(self.body.angle)
         rotated_image = pygame.transform.rotate(self.lander_texture, -angle_degrees)
@@ -415,8 +435,7 @@ class TwinFlameCan:
 
     def evaluate_lander(self):
         return [self.dist_to_landing,self.abs_velocity,self.fitness]
-    
-class PulseRocker(TwinFlameCan):
+
     def __init__(self,
                  position  : tuple[int,int],
                  screen    : pygame.Surface,
