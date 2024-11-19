@@ -59,21 +59,27 @@ class TwinFlameCan2:
                  screen:pygame.Surface,
                  space:pymunk.Space,
                  terrain,
+                 nn_data,
                  config):
         
         self.space   = space
         self.screen  = screen
         self.config  = config
         self.terrain = terrain
+        self.nn_data = nn_data
         self.body    = pymunk.Body()
         self.body.position = (random.randint(100,self.screen.get_width()-100),int(self.config['SIMULATION']['spawn_height']))
         
         w, h = 50, 50
-        vs   = [(-w/2+5,-h/2), (w/2-5,-h/2), (w/2,h/2), (-w/2,h/2)]
+        vs   = [(-w/2+5,-h/2+5), (w/2-5,-h/2+5), (w/2,h/2), (-w/2,h/2)]
 
         self.shape = pymunk.Poly(self.body, vs)
         self.dry_weight = int(self.config['LANDER']['dry_weight'])
         self.fuel_level = int(self.config['LANDER']['fuel_level'])
+
+        self.max_land_vel_x = int(self.config['LANDER']['max_land_vel_x'])
+        self.max_land_vel_y = int(self.config['LANDER']['max_land_vel_y'])
+
         self.shape.mass = self.dry_weight + self.fuel_level
         self.shape.friction = 1
         self.shape.collision_type = 1
@@ -95,7 +101,19 @@ class TwinFlameCan2:
 
         self.engine_force  = int(self.config['LANDER']['max_engine_power'])
         
-        self.alive = True
+        self.alive  = True
+        self.landed = False
+
+    def set_collided(self):
+        if self.landed:
+            return
+        
+        self.landed = True
+        if self.vel_x > self.max_land_vel_x or self.vel_y > self.max_land_vel_y:
+            self.alive = False
+        
+        self.update()
+        self.draw()
 
     def find_slope_and_y(self,x,current_segment):
         x1 , y1 = current_segment[0]
@@ -142,8 +160,6 @@ class TwinFlameCan2:
 
         if self.alive:
             self.think_and_act()
-
-        
 
     def draw(self):
         if not self.alive:
@@ -479,182 +495,3 @@ class TwinFlameCan:
 
     def evaluate_lander(self):
         return [self.dist_to_landing,self.abs_velocity,self.fitness]
-
-    def __init__(self,
-                 position  : tuple[int,int],
-                 screen    : pygame.Surface,
-                 space     : pymunk.Space,
-                 genome_id : int,
-                 network   : neat.nn.FeedForwardNetwork,
-                 genome    : neat.DefaultGenome,
-                 target_zone  : tuple[int,int],
-                 terrain_data : list[tuple[int,int]],
-                 image_assets : list[pygame.Surface],
-                 render_font  : pygame.font.Font):
-        
-        super().__init__(position, screen, space, genome_id, network, genome, target_zone, terrain_data,image_assets,render_font)
-        
-        ####### FUEL, THRUST AND MASS #######
-        
-        self.dry_mass       = 626
-        self.max_fuel       = 845
-        self.fuel           = self.max_fuel
-        self.thrust         = 900000
-        self.engine_force_m = 0
-        
-    def update(self):
-        self.angle = self.body.angle
-        self.x_pos = self.center_fuel_span.bb.center()[0]
-        self.y_pos = self.center_fuel_span.bb.center()[1]
-        
-        x1, y1 = self.x_pos, self.y_pos
-        x2, y2 = self.target_zone
-        self.dist_to_landing = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-        
-        angle_degrees            = math.degrees(self.angle)
-        angle_degrees_normalized = angle_degrees % 360
-        
-        self.roll_percentage  = min(angle_degrees_normalized, 360 - angle_degrees_normalized) / 180
-        
-        if not self.has_collided:
-            self.abs_velocity     = abs(self.body.velocity)
-            self.velocity_x       = self.body.velocity[0]
-            self.velocity_y       = self.body.velocity[1]
-        
-
-        if self.has_collided:
-            self.fitness = 500 * (1 - math.exp(-0.01 * math.sqrt(self.dist_to_landing**2 + self.abs_velocity**2)))
-        else:
-            self.fitness = 500 * (1 - math.exp(-0.01 * math.sqrt(self.dist_to_landing**2 + self.abs_velocity**2))) + 2000 
-            
-        if self.killed_by_roll:
-            self.fitness += self.infinity_value**2
-
-            
-        if not self.alive:
-            return
-        
-
-        if self.roll_percentage > 0.5:
-            self.killed_by_roll = True
-            self.kill()
-                 
-        #self.scan_probe_l, self.scan_probe_r = self.get_terrain_scanner_readings()
-        
-        self.x_dist_deviation = x2 - x1
-        self.y_dist_deviation = y2 - y1
-        self.angular_velocity = self.body.angular_velocity
-        self.altitude         = self.get_altitude()
-        
-        if self.x_pos > self.screen_w or self.x_pos < 0 or self.y_pos > self.screen_h or self.y_pos < 0:
-            self.killed_by_flying = True
-            self.kill()
-        
-        distance_corner_r = self.screen_w - self.x_pos
-        
-        engine_throttle_data = self.network.activate([self.altitude,
-                                                      #self.scan_probe_l,
-                                                      #self.scan_probe_r,
-                                                      self.x_dist_deviation,
-                                                      #self.y_dist_deviation,
-                                                      #distance_corner_r,
-                                                      #self.x_pos,
-                                                      #self.y_pos,
-                                                      self.velocity_x,
-                                                      self.velocity_y,
-                                                      self.angular_velocity,
-                                                      self.fuel
-                                                      ])
-        eng_l_out_raw = engine_throttle_data[0]
-        eng_r_out_raw = engine_throttle_data[1]
-        eng_m_out_raw = engine_throttle_data[2]
-        
-        if self.fuel > 0:
-            self.engine_force_l = sorted((0, (eng_l_out_raw+1)/2, 1))[1]
-            self.engine_force_r = sorted((0, (eng_r_out_raw+1)/2, 1))[1]
-            self.engine_force_m = sorted((0, (eng_m_out_raw+1)/2, 1))[1]
-            
-            self.fuel                  -= (self.engine_force_l * self.consume_rate/2)
-            self.fuel                  -= (self.engine_force_r * self.consume_rate/2)
-            self.fuel                  -= (self.engine_force_m * self.consume_rate)
-            self.center_fuel_span.mass  = self.fuel
-        else:
-            self.engine_force_l = 0
-            self.engine_force_r = 0
-            self.engine_force_m = 0
-        
-        
-        if angle_degrees_normalized > 270 or angle_degrees_normalized < 90:
-            force = -self.thrust * int(not self.has_collided)
-        else:
-            force = self.thrust * int(not self.has_collided)
-
-        fxm = force * math.sin(-self.angle)
-        fym = force * math.cos(-self.angle)
-        
-        fxr = fym     / 2
-        fyr = -fxm    / 2
-        
-        fxl = -fym    / 2
-        fyl = fxm     / 2
-        
-        fxm = self.engine_force_m * fxm
-        fym = self.engine_force_m * fym
-        fxl = self.engine_force_l * fxl
-        fyl = self.engine_force_l * fyl
-        fxr = self.engine_force_r * fxr
-        fyr = self.engine_force_r * fyr
-
-        self.body.apply_force_at_local_point((fxm, fym), self.center_fuel_span.center_of_gravity)
-        self.body.apply_force_at_local_point((fxl, fyl), self.body.center_of_gravity)
-        self.body.apply_force_at_local_point((fxr, fyr), self.body.center_of_gravity)
-        
-    def draw(self):
-        if not self.alive:
-            return
-        
-        angle_degrees = math.degrees(self.angle)
-        rotated_image = pygame.transform.rotate(self.skin, -angle_degrees)
-        rotated_rect  = rotated_image.get_rect(center=(self.x_pos, self.y_pos))
-        
-        self.skin = self.lander_engine_off
-        
-        if self.engine_force_l > 0.1 and self.engine_force_r > 0.1:
-            self.skin = self.lander_both_engine_on
-            self.smoke.emit(self.body.local_to_world(self.center_fuel_span.a))
-            self.smoke.emit(self.body.local_to_world(self.center_fuel_span.b))
-        elif self.engine_force_l > 0.1:
-            self.skin = self.lander_left_engine_on
-            self.smoke.emit(self.body.local_to_world(self.center_fuel_span.a))
-        elif self.engine_force_r > 0.1:
-            self.skin = self.lander_right_engine_on
-            self.smoke.emit(self.body.local_to_world(self.center_fuel_span.b))
-        
-        if self.engine_force_m > 0.1:
-            self.skin = self.lander_both_engine_on
-            self.smoke.emit(self.body.local_to_world(self.center_fuel_span.center_of_gravity))
-        
-        self.smoke.update_and_draw(1/30)
-        
-        fuel_percentage = max(0, min(1, self.fuel / self.max_fuel))
-        fuel_bar_width  = 30  
-        fuel_bar_height = 4  
-        fuel_bar_x      = self.x_pos - fuel_bar_width / 2  
-        fuel_bar_y      = self.y_pos - 40  
-        
-        pygame.draw.rect(self.screen, (255, 0, 0), (fuel_bar_x, fuel_bar_y, fuel_bar_width, fuel_bar_height))
-        pygame.draw.rect(self.screen, (0, 255, 0), (fuel_bar_x, fuel_bar_y, fuel_bar_width * fuel_percentage, fuel_bar_height))
-        
-        speed_text = self.font.render(f'Vel: {self.abs_velocity:.2f}', True, (255, 255, 255))
-        speed_text_rect = speed_text.get_rect(center=(fuel_bar_x, fuel_bar_y-20))
-
-        fitness_text = self.font.render(f'Fitness: {self.fitness:.2f}', True, (255, 255, 255))
-        fitness_text_rect = fitness_text.get_rect(center=(fuel_bar_x, fuel_bar_y-30))
-            
-        eng_text = self.font.render(f'Pow: {self.engine_force_l:.2f}L {self.engine_force_r:.2f}R', True, (255, 255, 255))
-        eng_text_rect = eng_text.get_rect(center=(fuel_bar_x, fuel_bar_y-40))
-        
-        self.screen.blit(speed_text, speed_text_rect)
-        self.screen.blit(fitness_text, fitness_text_rect)
-        self.screen.blit(eng_text, eng_text_rect)
-        self.screen.blit(rotated_image, rotated_rect)

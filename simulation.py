@@ -34,6 +34,11 @@ class GeneticSimulation2:
         self.lander_config.read(lander_config_file)
         self.terrain_config.read(terrain_config_file)
 
+        self.simulation_config_file = simulation_config_file
+        self.run_folder  = f'runs/{datetime.datetime.now()}'
+
+        self.generations = int(self.simulation_config['SIMULATION']['GENERATIONS'])
+
         pygame.init()
         pygame.display.set_caption('Genetic Lander')
         
@@ -78,6 +83,9 @@ class GeneticSimulation2:
 
         self.focused_lander = None
 
+        self.collion_handler = self.space.add_collision_handler(self.category['lander'],self.category['terrain'])
+        self.collion_handler.post_solve = self.handle_collision
+
     def handle_mouse_click(self,event):
         pos = event.pos
         for lander in self.landers:
@@ -95,20 +103,45 @@ class GeneticSimulation2:
 
         self.stat_screen.blit(lander_texture,(screen_width/2 - texture_width/2,10))
 
-    def run(self):
+    def run(self,resume_path : str = None):
+        os.mkdir(self.run_folder)
+
+        config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                             neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                             self.simulation_config_file)
+        
+        if resume_path:
+            population = neat.Checkpointer().restore_checkpoint(resume_path)
+        else:
+            population = neat.Population(config)
+
+        stats = neat.StatisticsReporter()
+        population.add_reporter(stats)
+        population.add_reporter(neat.StdOutReporter(True))
+        population.add_reporter(neat.Checkpointer(10,filename_prefix=f"{self.run_folder}/ckpt-"))
+
+        winner = population.run(self.simulation, self.generations)
+        pickle.dump(winner, open(os.path.join(self.run_folder, 'winner.pkl'), 'wb'))
+
         self.simulation()            
 
-    def simulation(self):
-        draw_options = DrawOptions(self.sim_screen)
-        self.__generate_terrain()
-
+    def simulation(self,genomes: list[tuple[int,neat.genome.DefaultGenome]],config):
+        
         self.landers = []
-        lander_count = int(self.simulation_config['SIMULATION']['POPULATION_SIZE'])
 
-        for i in range(lander_count):
-            lander = TwinFlameCan2(self.sim_screen,self.space,self.terrain,self.lander_config)
+        for genome_id, genome in genomes:
+            genome.fitness = 10000000
+            lander = TwinFlameCan2(self.sim_screen,
+                                   self.space,
+                                   self.terrain,
+                                   {"id":genome_id,"network":neat.nn.FeedForwardNetwork.create(genome,config)},
+                                   self.lander_config)
             lander.shape.filter = pymunk.ShapeFilter(categories = self.category['lander'], mask=self.mask['lander'])
+            lander.shape.collision_type = self.category['lander']
             self.landers.append(lander)
+
+        draw_options = DrawOptions(self.sim_screen)
+        self.generate_terrain()
 
         running = True
         paused  = False
@@ -133,7 +166,7 @@ class GeneticSimulation2:
             self.sim_screen.fill('BLACK')      
             self.stat_screen.fill('BLACK')      
 
-            self.__draw_terrain()
+            self.draw_terrain()
             for lander in self.landers:
                 lander.draw()
             
@@ -144,7 +177,7 @@ class GeneticSimulation2:
             pygame.display.flip()
             self.clock.tick(self.fps)      
 
-    def __generate_terrain(self):
+    def generate_terrain(self):
         noise_func = Noise()
 
         virt_height = self.height - 200
@@ -172,15 +205,28 @@ class GeneticSimulation2:
             x.friction = 1
             x.collision_type = 1
             x.filter = pymunk.ShapeFilter(categories = self.category['terrain'], mask=self.mask['terrain'])
+            x.collision_type = self.category['terrain']
             self.space.add(x)
 
-    def __draw_terrain(self):
+    def draw_terrain(self):
         points = [(0,self.height),self.terrain["segment_coords"][0][0]]
         for segment in self.terrain["segment_coords"]:
             points.append(segment[1])
         points.append((self.sim_width,self.height))
 
         pygame.gfxdraw.textured_polygon(self.sim_screen,points,self.terrain["texture"],0,0)
+
+    def handle_collision(self,arbiter,space,data):
+        shapes = arbiter.shapes
+        
+        if arbiter.is_first_contact:
+            ids    = [] 
+            for shape in shapes:
+                ids.append(shape.body.id)
+            
+            for lander in self.landers:
+                if lander.body.id in ids:
+                    lander.set_collided()
 
 
 class GeneticSimulation:
