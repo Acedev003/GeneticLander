@@ -36,13 +36,21 @@ class GeneticSimulation2:
 
         pygame.init()
         pygame.display.set_caption('Genetic Lander')
-
-        self.width    = int(self.simulation_config['SIMULATION']['WIDTH'])
-        self.height   = int(self.simulation_config['SIMULATION']['HEIGHT'])
-        self.headless = bool(self.simulation_config['SIMULATION']['HEADLESS'])
         
-        self.screen   = pygame.display.set_mode((self.width, self.height))
-        self.clock    = pygame.time.Clock()
+        self.sim_width    = int(self.simulation_config['SIMULATION']['SIM_WIDTH'])
+        self.stat_width   = int(self.simulation_config['SIMULATION']['STAT_WIDTH'])
+        self.screen_width = self.sim_width + self.stat_width
+        
+        self.height     = int(self.simulation_config['SIMULATION']['HEIGHT'])
+        self.headless   = bool(self.simulation_config['SIMULATION']['HEADLESS'])
+        
+        self.render_screen = pygame.display.set_mode((self.screen_width, self.height))
+
+        self.sim_screen  = self.render_screen.subsurface((0, 0, self.sim_width, self.height))
+        self.stat_screen = self.render_screen.subsurface((self.sim_width,0,200,self.height))
+        
+
+        self.clock     = pygame.time.Clock()
 
         self.terrain = {
             "texture" : pygame.image.load(self.terrain_config['CONFIG']['texture']).convert(),
@@ -68,20 +76,39 @@ class GeneticSimulation2:
             "lander":  0b01
         }
 
+        self.focused_lander = None
+
+    def handle_mouse_click(self,event):
+        pos = event.pos
+        for lander in self.landers:
+            if lander.shape.point_query(pos).distance < 0:
+                self.focused_lander = lander
+                return
+            
+    def display_stat(self):
+        if not self.focused_lander:
+            return
+        
+        lander_texture = self.focused_lander.lander_texture
+        screen_width   = self.stat_width
+        texture_width  = lander_texture.get_width()
+
+        self.stat_screen.blit(lander_texture,(screen_width/2 - texture_width/2,10))
+
     def run(self):
         self.simulation()            
 
     def simulation(self):
-        draw_options = DrawOptions(self.screen)
+        draw_options = DrawOptions(self.sim_screen)
         self.__generate_terrain()
 
-        landers = []
+        self.landers = []
         lander_count = int(self.simulation_config['SIMULATION']['POPULATION_SIZE'])
 
         for i in range(lander_count):
-            lander = TwinFlameCan2(self.screen,self.space,self.terrain,self.lander_config)
+            lander = TwinFlameCan2(self.sim_screen,self.space,self.terrain,self.lander_config)
             lander.shape.filter = pymunk.ShapeFilter(categories = self.category['lander'], mask=self.mask['lander'])
-            landers.append(lander)
+            self.landers.append(lander)
 
         running = True
         paused  = False
@@ -94,18 +121,24 @@ class GeneticSimulation2:
                         paused = not paused
                     if event.key == pygame.K_ESCAPE:
                         exit()
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    self.handle_mouse_click(event)
 
             if paused:
                 continue
             
-            for lander in landers:
+            for lander in self.landers:
                 lander.update()
 
-            self.screen.fill('BLACK')      
+            self.sim_screen.fill('BLACK')      
+            self.stat_screen.fill('BLACK')      
 
             self.__draw_terrain()
-            for lander in landers:
+            for lander in self.landers:
                 lander.draw()
+            
+            self.display_stat()
+
             #self.space.debug_draw(draw_options)
             self.space.step(1/(self.fps))
             pygame.display.flip()
@@ -118,16 +151,16 @@ class GeneticSimulation2:
         self.virt_height = virt_height
         prev_x = 0
         prev_y = virt_height
-        for x in range(self.terrain["segment_length"],self.width,self.terrain["segment_length"]):
-            y = virt_height + noise_func.generate_noise([x/self.width,0])*100
+        for x in range(self.terrain["segment_length"],self.sim_width,self.terrain["segment_length"]):
+            y = virt_height + noise_func.generate_noise([x/self.sim_width,0])*100
             y = min(self.height-50,y)
             self.terrain["segment_coords"].append(((prev_x,prev_y),(x,y)))
             prev_x = x
             prev_y = y
 
-        if prev_x < self.width:
-            y = virt_height + noise_func.generate_noise([x/self.width,0])*100
-            self.terrain["segment_coords"].append(((prev_x,prev_y),(self.width,y)))
+        if prev_x < self.sim_width:
+            y = virt_height + noise_func.generate_noise([x/self.sim_width,0])*100
+            self.terrain["segment_coords"].append(((prev_x,prev_y),(self.sim_width,y)))
 
         self.terrain["body"] = pymunk.Body(body_type = pymunk.Body.STATIC)
         self.terrain["body"].position = self.terrain["segment_coords"][0][0]
@@ -145,9 +178,9 @@ class GeneticSimulation2:
         points = [(0,self.height),self.terrain["segment_coords"][0][0]]
         for segment in self.terrain["segment_coords"]:
             points.append(segment[1])
-        points.append((self.width,self.height))
+        points.append((self.sim_width,self.height))
 
-        pygame.gfxdraw.textured_polygon(self.screen,points,self.terrain["texture"],0,0)
+        pygame.gfxdraw.textured_polygon(self.sim_screen,points,self.terrain["texture"],0,0)
 
 
 class GeneticSimulation:

@@ -114,6 +114,9 @@ class TwinFlameCan2:
         
         self.vel_x,self.vel_y = self.body.velocity
 
+        if self.angular_vel > 30.0:
+            self.alive = False
+            return
 
         self.current_segment = None
         for seg in self.terrain['segment_coords']:
@@ -127,17 +130,20 @@ class TwinFlameCan2:
         
         x = self.current_pos[0]
         self.slope,self.distance_to_surface = self.find_slope_and_y(x,self.current_segment)
+    
+    def think_and_act(self):
+        self.body.apply_force_at_local_point((0,-12233),(-10,50))
+        self.body.apply_force_at_local_point((0,-1200),(10,50))
 
     def update(self):
-        if not self.alive:
-            return
+        if not self.alive: return
         
         self.measure()
 
-        ### Apply
+        if self.alive:
+            self.think_and_act()
 
-        self.body.apply_force_at_local_point((0,-100),(-10,50))
-        self.body.apply_force_at_local_point((0,-00),(10,50))
+        
 
     def draw(self):
         if not self.alive:
