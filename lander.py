@@ -57,20 +57,24 @@ class SmokeEmitter:
 class TwinFlameCan2:
     def __init__(self,
                  screen:pygame.Surface,
-                 space,
+                 space:pymunk.Space,
+                 terrain,
                  config):
         
-        self.space  = space
-        self.screen = screen
-        self.config = config
-        self.body  = pymunk.Body()
+        self.space   = space
+        self.screen  = screen
+        self.config  = config
+        self.terrain = terrain
+        self.body    = pymunk.Body()
         self.body.position = (random.randint(100,self.screen.get_width()-100),int(self.config['SIMULATION']['spawn_height']))
         
         w, h = 50, 50
         vs   = [(-w/2+5,-h/2), (w/2-5,-h/2), (w/2,h/2), (-w/2,h/2)]
 
         self.shape = pymunk.Poly(self.body, vs)
-        self.shape.mass = int(self.config['LANDER']['weight'])
+        self.dry_weight = int(self.config['LANDER']['dry_weight'])
+        self.fuel_level = int(self.config['LANDER']['fuel_level'])
+        self.shape.mass = self.dry_weight + self.fuel_level
         self.shape.friction = 1
         self.shape.collision_type = 1
         self.space.add(self.body)
@@ -93,10 +97,45 @@ class TwinFlameCan2:
         
         self.alive = True
 
+    def find_slope_and_y(self,x,current_segment):
+        x1 , y1 = current_segment[0]
+        x2 , y2 = current_segment[1]
+        slope = (y2 - y1) / (x2 - x1)
+
+        y = y1 + slope * (x- x1)
+        return slope,y
+
+    def measure(self):
+        self.current_pos = int(self.body.position.x), int(self.body.position.y)       
+        self.angle       = self.body.angle 
+        self.sin_angle   = math.sin(self.angle)
+        self.cos_angle   = math.cos(self.angle)
+        self.angular_vel = self.body.angular_velocity
+        
+        self.vel_x,self.vel_y = self.body.velocity
+
+
+        self.current_segment = None
+        for seg in self.terrain['segment_coords']:
+            if seg[0][0] > self.current_pos[0]:
+                self.current_segment = seg
+                break
+
+        if self.current_segment is None:
+            self.alive = False
+            return
+        
+        x = self.current_pos[0]
+        self.slope,self.distance_to_surface = self.find_slope_and_y(x,self.current_segment)
+
     def update(self):
         if not self.alive:
             return
         
+        self.measure()
+
+        ### Apply
+
         self.body.apply_force_at_local_point((0,-100),(-10,50))
         self.body.apply_force_at_local_point((0,-00),(10,50))
 
@@ -104,11 +143,10 @@ class TwinFlameCan2:
         if not self.alive:
             return
         
-        p = int(self.body.position.x), int(self.body.position.y)
-
+        current_pos   = int(self.body.position.x), int(self.body.position.y)
         angle_degrees = math.degrees(self.body.angle)
         rotated_image = pygame.transform.rotate(self.lander_texture, -angle_degrees)
-        rotated_rect  = rotated_image.get_rect(center=p)
+        rotated_rect  = rotated_image.get_rect(center=current_pos)
         self.screen.blit(rotated_image, rotated_rect)
     
 class TwinFlameCan:

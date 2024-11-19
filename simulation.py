@@ -79,7 +79,7 @@ class GeneticSimulation2:
         lander_count = int(self.simulation_config['SIMULATION']['POPULATION_SIZE'])
 
         for i in range(lander_count):
-            lander = TwinFlameCan2(self.screen,self.space,self.lander_config)
+            lander = TwinFlameCan2(self.screen,self.space,self.terrain,self.lander_config)
             lander.shape.filter = pymunk.ShapeFilter(categories = self.category['lander'], mask=self.mask['lander'])
             landers.append(lander)
 
