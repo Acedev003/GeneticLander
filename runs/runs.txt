@@ -1,1 +1,0 @@
-Fitness data for each run saved in this directory

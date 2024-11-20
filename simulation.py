@@ -85,7 +85,7 @@ class GeneticSimulation:
         self.focused_lander:TwinFlameCan = None
 
         self.collion_handler = self.space.add_collision_handler(self.category['lander'],self.category['terrain'])
-        self.collion_handler.post_solve = self.handle_collision
+        self.collion_handler.pre_solve = self.handle_collision
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -171,7 +171,7 @@ class GeneticSimulation:
         img = font.render(f"ID   : {self.focused_lander.body.id}", False, "WHITE")
         self.stat_screen.blit(img, (5, 340))
 
-        img = font.render(f"IMP  : {self.focused_lander.impulse}", False, "WHITE")
+        img = font.render(f"VEL L: {self.focused_lander.land_velocity}", False, "WHITE")
         self.stat_screen.blit(img, (5, 360))
 
         if paused:

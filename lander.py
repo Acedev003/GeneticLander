@@ -49,7 +49,7 @@ class TwinFlameCan:
 
         self.engine_force  = int(self.config['LANDER']['max_engine_power'])
 
-        self.impulse = 100000000
+        self.land_velocity = self.max_init_velocity
 
         self.alive  = True
         self.landed = False
@@ -80,7 +80,7 @@ class TwinFlameCan:
     
     def set_collided(self,impulse):
         if not self.landed:
-            self.impulse = abs(impulse)
+            self.land_velocity = abs(self.body.velocity)
             self.landed  = True
 
     def update(self):
@@ -114,13 +114,19 @@ class TwinFlameCan:
             return
         
         if self.landed:
-            if self.impulse > 10000:
+            if self.land_velocity > int(self.config['LANDER']['max_land_vel']):
                 self.kill("landed in too hot")
                 return
             
         x = self.current_pos[0]
         self.slope,y = self.find_slope_and_y(x,self.current_segment)
         self.distance_to_surface =  y - self.current_pos[1] - self.h/2
+
+
+
+        self.body.apply_force_at_local_point((0,-0),(-10,50))
+        self.body.apply_force_at_local_point((0,-0),(10,50))
+
         
     def draw(self):
         if not self.alive: return
