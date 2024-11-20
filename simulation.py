@@ -79,6 +79,8 @@ class GeneticSimulation:
             "lander":  0b01
         }
 
+        self.lander_config['SIMULATION']['category'] = str(self.category['lander'])
+
         self.landers:list[TwinFlameCan]  = []
         self.focused_lander:TwinFlameCan = None
 
@@ -100,12 +102,20 @@ class GeneticSimulation:
     def handle_mouse_click(self,event):
         pos = event.pos
         for lander in self.landers:
-            if lander.shape.point_query(pos).distance < 0:
+            if lander.shape.point_query(pos).distance < 0 and lander.is_alive():
                 self.focused_lander = lander
                 return
+        self.focused_lander = None
     
-    def handle_collision(self):
-        return
+    def handle_collision(self,arbiter:pymunk.Arbiter,space,data):
+        for shape in arbiter.shapes:
+            if shape.body.body_type == pymunk.Body.DYNAMIC:
+                static_id = shape.body.id
+                for lander in self.landers:
+                    if not lander.landed:
+                        if lander.body:
+                            if lander.body.id == static_id:
+                                lander.set_collided(arbiter.total_impulse)
 
     def display_stat(self,paused):
         if not self.focused_lander:
@@ -118,39 +128,51 @@ class GeneticSimulation:
         self.stat_screen.blit(lander_texture,(screen_width/2 - texture_width/2,10))
 
         font = pygame.font.SysFont(None, 18)
-
-        img = font.render(f"VEL X: {self.focused_lander.vel_x:.3f}", False, "WHITE")
+        
+        img = font.render(f"POS X: {self.focused_lander.current_pos[0]:.3f}", False, "WHITE")
         self.stat_screen.blit(img, (5, 80))
 
-        img = font.render(f"VEL Y: {self.focused_lander.vel_y:.3f}", False, "WHITE")
+        img = font.render(f"POS Y: {self.focused_lander.current_pos[1]:.3f}", False, "WHITE")
         self.stat_screen.blit(img, (5, 100))
 
-        img = font.render(f"ANGLE: {self.focused_lander.angle:.3f}", False, "WHITE")
+        img = font.render(f"VEL X: {self.focused_lander.vel_x:.3f}", False, "WHITE")
         self.stat_screen.blit(img, (5, 120))
 
-        img = font.render(f"R VEL: {self.focused_lander.angular_vel:.3f}", False, "WHITE")
+        img = font.render(f"VEL Y: {self.focused_lander.vel_y:.3f}", False, "WHITE")
         self.stat_screen.blit(img, (5, 140))
 
-        img = font.render(f"SLOPE: {self.focused_lander.slope:.3f}", False, "WHITE")
+        img = font.render(f"ANGLE: {self.focused_lander.angle:.3f}", False, "WHITE")
         self.stat_screen.blit(img, (5, 160))
 
-        img = font.render(f"HGHT : {self.focused_lander.distance_to_surface:.3f}", False, "WHITE")
+        img = font.render(f"R VEL: {self.focused_lander.angular_vel:.3f}", False, "WHITE")
         self.stat_screen.blit(img, (5, 180))
 
-        img = font.render(f"LAND?: {self.focused_lander.landed}", False, "WHITE")
+        img = font.render(f"ZON L: {self.focused_lander.zone_dist_l:.3f}", False, "WHITE")
         self.stat_screen.blit(img, (5, 200))
 
-        img = font.render(f"ALIVE: {self.focused_lander.alive}", False, "WHITE")
+        img = font.render(f"ZON R: {self.focused_lander.zone_dist_r:.3f}", False, "WHITE")
         self.stat_screen.blit(img, (5, 220))
-
-        img = font.render(f"COD  : {self.focused_lander.cause_of_death}", False, "WHITE")
+        
+        img = font.render(f"SLOPE: {self.focused_lander.slope:.3f}", False, "WHITE")
         self.stat_screen.blit(img, (5, 240))
 
-        img = font.render(f"ID   : {self.focused_lander.body.id}", False, "WHITE")
+        img = font.render(f"HGHT : {self.focused_lander.distance_to_surface:.3f}", False, "WHITE")
         self.stat_screen.blit(img, (5, 260))
 
-        img = font.render(f"IMP  : {self.focused_lander.impulse}", False, "WHITE")
+        img = font.render(f"LAND?: {self.focused_lander.landed}", False, "WHITE")
         self.stat_screen.blit(img, (5, 280))
+
+        img = font.render(f"ALIVE: {self.focused_lander.is_alive()}", False, "WHITE")
+        self.stat_screen.blit(img, (5, 300))
+
+        img = font.render(f"COD  : {self.focused_lander.cause_of_death}", False, "WHITE")
+        self.stat_screen.blit(img, (5, 320))
+
+        img = font.render(f"ID   : {self.focused_lander.body.id}", False, "WHITE")
+        self.stat_screen.blit(img, (5, 340))
+
+        img = font.render(f"IMP  : {self.focused_lander.impulse}", False, "WHITE")
+        self.stat_screen.blit(img, (5, 360))
 
         if paused:
             pygame.display.flip()
@@ -199,7 +221,7 @@ class GeneticSimulation:
         self.space.add(self.terrain['body'])
         for segment in self.terrain["segments"]:
             segment.friction = 1
-            segment.collision_type = 1
+            segment.collision_type = self.category['terrain']
             segment.filter = pymunk.ShapeFilter(categories=self.category['terrain'], mask=self.mask['terrain'])
             self.space.add(segment)
 
@@ -283,7 +305,7 @@ class GeneticSimulation:
             
             self.draw_terrain()
             for lander in self.landers:
-               if lander.alive:
+                if lander.is_alive():
                    lander.update()
                    lander.draw()
             
