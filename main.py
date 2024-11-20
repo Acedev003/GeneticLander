@@ -1,5 +1,5 @@
 import argparse
-from simulation import GeneticSimulation2
+from simulation import GeneticSimulation
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Genetic Lander")
@@ -9,7 +9,7 @@ if __name__ == '__main__':
     parser.add_argument('-ct', '--config_terrain', type=str, default="configs/terrain.ini", help="Path to terrain config")
     
     args = parser.parse_args()
-    sim = GeneticSimulation2(
+    sim = GeneticSimulation(
         simulation_config_file=args.config_simulation,
         lander_config_file=args.config_lander,
         terrain_config_file=args.config_terrain,
