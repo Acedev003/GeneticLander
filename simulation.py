@@ -1,4 +1,5 @@
 import pygame
+import pymunk
 import random
 
 from dataclasses import dataclass
@@ -17,9 +18,12 @@ class LanderSimulation:
     def __init__(self,
                  screen_size = (1280, 720),
                  terrain_height = 150,
-                 land_strip_len = 100
+                 land_strip_len = 100,
+                 gravity = 500
+
         ):
         pygame.init()
+        pygame.display.set_caption('Genetic Lander')
         
         self.screen_width  = screen_size[0]
         self.screen_height = screen_size[1]
@@ -29,9 +33,21 @@ class LanderSimulation:
 
         self.land_strip_len   = land_strip_len
         self.terrain_height   = terrain_height
-        terrain_gen_results   = self.generate_terrain(num_segments=300)
+        terrain_gen_results   = self.generate_terrain(num_segments=100)
         self.terrain_segments = terrain_gen_results[1]
         self.landing_target   = terrain_gen_results[0]
+
+        self.gravity       = gravity
+        self.physics_space = pymunk.Space()
+        self.physics_space.gravity = (0, -500)
+
+        self.init_physics_terrain()
+
+        body = pymunk.Body(1,100,body_type=pymunk.Body.DYNAMIC)
+        body.position = (600,600)
+        shape = pymunk.Circle(body,50)
+        self.physics_space.add(body,shape)
+        self.shape = shape
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -69,8 +85,11 @@ class LanderSimulation:
         
         return segments
 
+    def point_to_pygame_point(self,point: Point):
+        return Point(point.x,self.screen_height-point.y)
+
     def generate_terrain(self,num_segments=3,bound=100,bound_diff=20) -> tuple[Point,list[Segment]]:
-        start_y = self.screen_height - self.terrain_height
+        start_y = self.terrain_height
 
         segments = self.midpoint_displace(
             num_segments=num_segments,
@@ -105,26 +124,48 @@ class LanderSimulation:
                 segment.start_point.y = landing_segment_start_y
                 segment.end_point.y   = landing_segment_start_y
 
-
-            
             return landing_zone_midpoint, segments
-        
+
+    def init_physics_terrain(self):
+        body  = pymunk.Body(body_type=pymunk.Body.STATIC)
+        self.physics_space.add(body)
+        for segment in self.terrain_segments:
+            start_point = (segment.start_point.x,segment.start_point.y)
+            end_point   = (segment.end_point.x,segment.end_point.y)
+
+            shape = pymunk.Segment(body, start_point, end_point, 5)
+            self.physics_space.add(shape)
+
     def draw_terrain(self):
         for segment in self.terrain_segments:
-                pygame.draw.line(self.screen, (255,255,255), (segment.start_point.x,segment.start_point.y), (segment.end_point.x,segment.end_point.y))
+                start_point = self.point_to_pygame_point(segment.start_point)
+                end_point   = self.point_to_pygame_point(segment.end_point)
+                pygame.draw.line(self.screen, (255,255,255), (start_point.x,start_point.y), (end_point.x,end_point.y))
         
-
     def run(self):
         while True:
+            # Logic
             self.handle_events()
 
-            # Logic
+            self.physics_space.step(1/60)
 
+            # Render
             self.screen.fill((0,0,0))
-
-            # Draw
 
             self.draw_terrain()
             
+            point = Point(
+                self.shape.body.position.x,
+                self.shape.body.position.y,
+            )
+
+            point = self.point_to_pygame_point(point)
+            pygame.draw.circle(
+                self.screen,
+                (255,255,255),
+                (point.x,point.y),
+                80
+            )
+
             pygame.display.flip()
             self.clock.tick(60)
