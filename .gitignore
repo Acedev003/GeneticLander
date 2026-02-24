@@ -7,3 +7,5 @@ fitness_results.csv
 
 !checkpoints/checkpoints.txt
 !runs/runs.txt
+
+.vscode
