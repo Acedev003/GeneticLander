@@ -2,17 +2,8 @@ import pygame
 import pymunk
 import random
 
-from dataclasses import dataclass
-
-@dataclass
-class Point:
-    x: int
-    y: int
-
-@dataclass
-class Segment:
-    start_point: Point
-    end_point: Point
+from primitives import Segment, Point
+from lander import TwinFlameLander
 
 class LanderSimulation:
     def __init__(self,
@@ -43,11 +34,6 @@ class LanderSimulation:
 
         self.init_physics_terrain()
 
-        body = pymunk.Body(1,100,body_type=pymunk.Body.DYNAMIC)
-        body.position = (600,600)
-        shape = pymunk.Circle(body,50)
-        self.physics_space.add(body,shape)
-        self.shape = shape
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -134,6 +120,7 @@ class LanderSimulation:
             end_point   = (segment.end_point.x,segment.end_point.y)
 
             shape = pymunk.Segment(body, start_point, end_point, 5)
+            shape.friction = 0.1
             self.physics_space.add(shape)
 
     def draw_terrain(self):
@@ -143,6 +130,11 @@ class LanderSimulation:
                 pygame.draw.line(self.screen, (255,255,255), (start_point.x,start_point.y), (end_point.x,end_point.y))
         
     def run(self):
+        lander = TwinFlameLander(
+            self.screen,
+            self.physics_space,
+            self.terrain_height
+        )
         while True:
             # Logic
             self.handle_events()
@@ -153,19 +145,6 @@ class LanderSimulation:
             self.screen.fill((0,0,0))
 
             self.draw_terrain()
-            
-            point = Point(
-                self.shape.body.position.x,
-                self.shape.body.position.y,
-            )
-
-            point = self.point_to_pygame_point(point)
-            pygame.draw.circle(
-                self.screen,
-                (255,255,255),
-                (point.x,point.y),
-                80
-            )
-
+            lander.draw()
             pygame.display.flip()
             self.clock.tick(60)
