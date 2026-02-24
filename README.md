@@ -1,3 +1,0 @@
-# GeneticLander
-
-- to be added
